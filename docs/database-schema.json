@@ -1,0 +1,144 @@
+{
+  "schema_version": "1.0.0",
+  "project": "FitFlip",
+  "tables": {
+    "users": {
+      "description": "Registered users of the app",
+      "columns": {
+        "id": { "type": "uuid", "primary": true, "default": "gen_random_uuid()" },
+        "email": { "type": "varchar(255)", "unique": true, "nullable": false },
+        "password_hash": { "type": "varchar(255)", "nullable": false },
+        "display_name": { "type": "varchar(100)", "nullable": false },
+        "avatar_url": { "type": "text", "nullable": true },
+        "bio": { "type": "varchar(500)", "nullable": true },
+        "location_lat": { "type": "decimal(10,7)", "nullable": true },
+        "location_lng": { "type": "decimal(10,7)", "nullable": true },
+        "city": { "type": "varchar(100)", "nullable": true },
+        "preferred_sizes": { "type": "varchar[]", "nullable": true, "note": "Array of sizes user is interested in: XS, S, M, L, XL, XXL" },
+        "preferred_categories": { "type": "varchar[]", "nullable": true, "note": "Array of category slugs user prefers" },
+        "created_at": { "type": "timestamptz", "default": "now()" },
+        "updated_at": { "type": "timestamptz", "default": "now()" }
+      },
+      "indexes": [
+        { "columns": ["email"], "unique": true },
+        { "columns": ["location_lat", "location_lng"], "type": "btree" }
+      ]
+    },
+
+    "categories": {
+      "description": "Clothing categories (tops, bottoms, shoes, accessories, etc.)",
+      "columns": {
+        "id": { "type": "serial", "primary": true },
+        "name": { "type": "varchar(50)", "unique": true, "nullable": false },
+        "slug": { "type": "varchar(50)", "unique": true, "nullable": false },
+        "icon": { "type": "varchar(50)", "nullable": true }
+      }
+    },
+
+    "clothing_items": {
+      "description": "Individual clothing items listed for swap",
+      "columns": {
+        "id": { "type": "uuid", "primary": true, "default": "gen_random_uuid()" },
+        "owner_id": { "type": "uuid", "nullable": false, "references": "users.id" },
+        "title": { "type": "varchar(100)", "nullable": false },
+        "description": { "type": "varchar(500)", "nullable": true },
+        "brand": { "type": "varchar(100)", "nullable": true },
+        "size": { "type": "varchar(10)", "nullable": false, "note": "XS, S, M, L, XL, XXL, or numeric" },
+        "category_id": { "type": "integer", "nullable": false, "references": "categories.id" },
+        "condition": { "type": "varchar(20)", "nullable": false, "note": "new_with_tags, like_new, good, fair" },
+        "color": { "type": "varchar(50)", "nullable": true },
+        "images": { "type": "text[]", "nullable": false, "note": "Array of image URLs, first is primary. Min 1, max 6." },
+        "is_active": { "type": "boolean", "default": true, "note": "false when swapped or manually delisted" },
+        "created_at": { "type": "timestamptz", "default": "now()" },
+        "updated_at": { "type": "timestamptz", "default": "now()" }
+      },
+      "indexes": [
+        { "columns": ["owner_id"], "type": "btree" },
+        { "columns": ["is_active"], "type": "btree" },
+        { "columns": ["category_id"], "type": "btree" },
+        { "columns": ["created_at"], "type": "btree", "order": "DESC" }
+      ]
+    },
+
+    "swipes": {
+      "description": "Records every swipe action. A user swipes on an item, not a person.",
+      "columns": {
+        "id": { "type": "uuid", "primary": true, "default": "gen_random_uuid()" },
+        "swiper_id": { "type": "uuid", "nullable": false, "references": "users.id", "note": "The user performing the swipe" },
+        "item_id": { "type": "uuid", "nullable": false, "references": "clothing_items.id", "note": "The item being swiped on" },
+        "direction": { "type": "varchar(5)", "nullable": false, "note": "'left' (pass) or 'right' (like)" },
+        "created_at": { "type": "timestamptz", "default": "now()" }
+      },
+      "constraints": [
+        { "type": "unique", "columns": ["swiper_id", "item_id"], "note": "A user can only swipe once per item" },
+        { "type": "check", "expression": "direction IN ('left', 'right')" }
+      ],
+      "indexes": [
+        { "columns": ["swiper_id", "direction"], "type": "btree", "note": "Fast lookup for reverse-match check" },
+        { "columns": ["item_id", "direction"], "type": "btree" }
+      ]
+    },
+
+    "matches": {
+      "description": "A match is created when two users have mutually liked each other's items. Each match links exactly 2 items and 2 users.",
+      "columns": {
+        "id": { "type": "uuid", "primary": true, "default": "gen_random_uuid()" },
+        "user1_id": { "type": "uuid", "nullable": false, "references": "users.id", "note": "The user who triggered the match (second swiper)" },
+        "user2_id": { "type": "uuid", "nullable": false, "references": "users.id", "note": "The other user (first swiper)" },
+        "item1_id": { "type": "uuid", "nullable": false, "references": "clothing_items.id", "note": "Item owned by user2 that user1 liked" },
+        "item2_id": { "type": "uuid", "nullable": false, "references": "clothing_items.id", "note": "Item owned by user1 that user2 liked" },
+        "status": { "type": "varchar(20)", "default": "'active'", "note": "'active', 'completed' (swap done), 'cancelled'" },
+        "created_at": { "type": "timestamptz", "default": "now()" },
+        "updated_at": { "type": "timestamptz", "default": "now()" }
+      },
+      "constraints": [
+        { "type": "unique", "columns": ["item1_id", "item2_id"], "note": "Same item pair cannot match twice" }
+      ],
+      "indexes": [
+        { "columns": ["user1_id"], "type": "btree" },
+        { "columns": ["user2_id"], "type": "btree" },
+        { "columns": ["status"], "type": "btree" }
+      ]
+    },
+
+    "messages": {
+      "description": "Chat messages within a match room",
+      "columns": {
+        "id": { "type": "uuid", "primary": true, "default": "gen_random_uuid()" },
+        "match_id": { "type": "uuid", "nullable": false, "references": "matches.id" },
+        "sender_id": { "type": "uuid", "nullable": false, "references": "users.id" },
+        "content": { "type": "text", "nullable": false },
+        "message_type": { "type": "varchar(20)", "default": "'text'", "note": "'text', 'image', 'system'" },
+        "read_at": { "type": "timestamptz", "nullable": true, "note": "null = unread" },
+        "created_at": { "type": "timestamptz", "default": "now()" }
+      },
+      "indexes": [
+        { "columns": ["match_id", "created_at"], "type": "btree", "order": "DESC", "note": "Paginated chat history" },
+        { "columns": ["sender_id"], "type": "btree" },
+        { "columns": ["match_id", "read_at"], "type": "btree", "note": "Unread count queries" }
+      ]
+    }
+  },
+
+  "feed_query_notes": {
+    "description": "The /items/feed endpoint must exclude:",
+    "exclusions": [
+      "Items owned by the requesting user",
+      "Items the user has already swiped on (join swipes table)",
+      "Items where is_active = false",
+      "Optionally: items outside user's preferred sizes/categories"
+    ],
+    "ordering": "Randomized or by created_at DESC with pagination cursor"
+  },
+
+  "match_check_query_notes": {
+    "description": "When User A swipes RIGHT on Item X (owned by User B):",
+    "steps": [
+      "1. INSERT into swipes (swiper_id=A, item_id=X, direction='right')",
+      "2. SELECT from swipes WHERE swiper_id=B AND direction='right' AND item_id IN (SELECT id FROM clothing_items WHERE owner_id=A AND is_active=true)",
+      "3. For each found reverse-swipe, check that no match already exists for that item pair",
+      "4. If a valid reverse-swipe exists, INSERT into matches and return the match",
+      "5. Steps 1-4 must run inside a TRANSACTION to prevent race conditions"
+    ]
+  }
+}

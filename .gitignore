@@ -1,0 +1,48 @@
+# Secrets / MCP config
+.mcp.json
+
+# Flutter/Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+pubspec.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+*.pem
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Android
+android/.gradle/
+android/local.properties
+android/app/debug/
+android/app/profile/
+android/app/release/
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+
+# Generated
+*.freezed.dart
+*.g.dart
+
+# Misc
+.env
+.env*.local
+*.log
+node_modules/

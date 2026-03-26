@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter analyze:*)",
+      "Bash(flutter build:*)",
+      "Bash(tasklist /fi 'imagename eq dart.exe')",
+      "Bash(netstat -ano)",
+      "Bash(taskkill /F /IM dart.exe)",
+      "Bash(taskkill /F /IM chrome.exe)",
+      "Bash(flutter run:*)"
+    ]
+  }
+}
