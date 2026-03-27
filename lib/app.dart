@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'router/router.dart';
 import 'theme/app_theme.dart';
 
-class FitFlipApp extends ConsumerWidget {
-  const FitFlipApp({super.key});
+class ModaApp extends ConsumerWidget {
+  const ModaApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

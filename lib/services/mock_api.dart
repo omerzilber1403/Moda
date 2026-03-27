@@ -32,7 +32,9 @@ class MockApi {
     'scarf': 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=400&h=600&fit=crop',
   };
 
-  static final List<User> users = [
+  static final List<User> users = _initialUsers();
+
+  static List<User> _initialUsers() => [
     User(
       id: _currentUserId,
       email: 'me@fitflip.com',
@@ -456,8 +458,9 @@ class MockApi {
     ];
   }
 
-  // Pre-built orders
-  static final List<Order> orders = [
+  static final List<Order> orders = _initialOrders();
+
+  static List<Order> _initialOrders() => [
     Order(
       id: 'order-1',
       buyerId: _currentUserId,
@@ -487,7 +490,9 @@ class MockApi {
     ),
   ];
 
-  static final List<Message> messages = [
+  static final List<Message> messages = _initialMessages();
+
+  static List<Message> _initialMessages() => [
     // order-1 messages
     Message(
       id: 'msg-1',
@@ -542,7 +547,9 @@ class MockApi {
     ),
   ];
 
-  static final List<Transaction> transactions = [
+  static final List<Transaction> transactions = _initialTransactions();
+
+  static List<Transaction> _initialTransactions() => [
     Transaction(
       id: 'tx-1',
       userId: _currentUserId,
@@ -742,5 +749,25 @@ class MockApi {
   /// Get category by id.
   static Category? getCategoryById(int id) {
     return categories.where((c) => c.id == id).firstOrNull;
+  }
+
+  /// Reset all mutable state to initial values.
+  /// Call this in test setUp() to get a clean slate between tests.
+  static void reset() {
+    users
+      ..clear()
+      ..addAll(_initialUsers());
+    items
+      ..clear()
+      ..addAll(_generateItems());
+    orders
+      ..clear()
+      ..addAll(_initialOrders());
+    messages
+      ..clear()
+      ..addAll(_initialMessages());
+    transactions
+      ..clear()
+      ..addAll(_initialTransactions());
   }
 }
