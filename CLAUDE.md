@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## MCP Usage Rules
+
+- **Supabase MCP** (`mcp__supabase__*`) — use freely for all backend/database tasks without asking.
+- **GitHub MCP** (`mcp__github__*`) — DO NOT use unless the user explicitly asks. Requires approval each time.
+- **All other MCPs** — require explicit user approval before use.
+
 ## Project Overview
 
 **Moda** is a hybrid mobile marketplace app for buying and selling second-hand clothes using a virtual currency called **Style Coins (SC)**. It combines a traditional marketplace grid (Zara/ASOS style) with a gamified Tinder-style swipe discovery feed. New users receive 50 free Style Coins; additional coins can be bought with real money (1 shekel = 1 coin).

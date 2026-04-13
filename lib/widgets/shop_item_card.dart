@@ -6,7 +6,7 @@ import '../theme/tokens.dart';
 
 class ShopItemCard extends StatelessWidget {
   final ClothingItem item;
-  final User owner;
+  final AppUserRef owner;
   final VoidCallback? onTap;
 
   const ShopItemCard({

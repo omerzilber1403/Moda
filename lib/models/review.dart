@@ -19,6 +19,30 @@ class Review {
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
+  factory Review.fromJson(Map<String, dynamic> json) {
+    return Review(
+      id: json['id'] as String,
+      orderId: json['order_id'] as String,
+      reviewerId: json['reviewer_id'] as String,
+      revieweeId: json['reviewee_id'] as String,
+      itemId: json['item_id'] as String,
+      rating: json['rating'] as int? ?? 0,
+      comment: json['comment'] as String? ?? '',
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String)
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'order_id': orderId,
+        'reviewer_id': reviewerId,
+        'reviewee_id': revieweeId,
+        'item_id': itemId,
+        'rating': rating,
+        'comment': comment,
+      };
+
   Review copyWith({
     String? id,
     String? orderId,

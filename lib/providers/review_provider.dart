@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
-import 'auth_provider.dart';
+import '../services/supabase_service.dart';
 
 class ReviewsState {
   final List<Review> reviews;
@@ -23,50 +23,34 @@ class ReviewsState {
 
   double get averageRating {
     if (reviews.isEmpty) return 0;
-    return reviews.map((r) => r.rating).reduce((a, b) => a + b) / reviews.length;
+    return reviews.map((r) => r.rating).reduce((a, b) => a + b) /
+        reviews.length;
   }
 }
 
 class ReviewsNotifier extends StateNotifier<ReviewsState> {
-  final Ref ref;
-
-  ReviewsNotifier(this.ref) : super(const ReviewsState()) {
-    _loadMockReviews();
+  ReviewsNotifier() : super(const ReviewsState()) {
+    loadReviews();
   }
 
-  void _loadMockReviews() {
-    state = ReviewsState(reviews: [
-      Review(
-        id: 'rev-1',
-        orderId: 'order-1',
-        reviewerId: 'user-2',
-        revieweeId: 'user-me',
-        itemId: 'item-1',
-        rating: 5,
-        comment: 'Item was exactly as described! Great condition, fast meetup.',
-        createdAt: DateTime.now().subtract(const Duration(days: 10)),
-      ),
-      Review(
-        id: 'rev-2',
-        orderId: 'order-2',
-        reviewerId: 'user-3',
-        revieweeId: 'user-me',
-        itemId: 'item-5',
-        rating: 4,
-        comment: 'Nice quality, slightly different shade than photos but still love it.',
-        createdAt: DateTime.now().subtract(const Duration(days: 5)),
-      ),
-      Review(
-        id: 'rev-3',
-        orderId: 'order-3',
-        reviewerId: 'user-me',
-        revieweeId: 'user-4',
-        itemId: 'item-12',
-        rating: 5,
-        comment: 'Perfect vintage find! Seller was super friendly.',
-        createdAt: DateTime.now().subtract(const Duration(days: 3)),
-      ),
-    ]);
+  String? get _userId => supabase.auth.currentUser?.id;
+
+  Future<void> loadReviews() async {
+    final userId = _userId;
+    if (userId == null) return;
+    state = state.copyWith(isLoading: true);
+    try {
+      final data = await supabase
+          .from('reviews')
+          .select()
+          .or('reviewer_id.eq.$userId,reviewee_id.eq.$userId')
+          .order('created_at', ascending: false);
+      final reviews =
+          (data as List).map((e) => Review.fromJson(e)).toList();
+      state = ReviewsState(reviews: reviews);
+    } catch (_) {
+      state = state.copyWith(isLoading: false);
+    }
   }
 
   List<Review> getReviewsForUser(String userId) {
@@ -77,34 +61,39 @@ class ReviewsNotifier extends StateNotifier<ReviewsState> {
     return state.reviews.where((r) => r.itemId == itemId).toList();
   }
 
-  Future<void> addReview({
+  /// Returns true on success.
+  /// Throws if the order isn't completed or a review already exists
+  /// (enforced server-side by the `can_review` RLS policy).
+  Future<bool> addReview({
     required String orderId,
     required String revieweeId,
     required String itemId,
     required int rating,
     required String comment,
   }) async {
-    final userId = ref.read(authProvider).user?.id;
-    if (userId == null) return;
+    final userId = _userId;
+    if (userId == null) return false;
 
     state = state.copyWith(isLoading: true);
-    await Future.delayed(const Duration(milliseconds: 300));
-
-    final review = Review(
-      id: 'rev-${DateTime.now().millisecondsSinceEpoch}',
-      orderId: orderId,
-      reviewerId: userId,
-      revieweeId: revieweeId,
-      itemId: itemId,
-      rating: rating,
-      comment: comment,
-    );
-
-    state = ReviewsState(reviews: [...state.reviews, review]);
+    try {
+      await supabase.from('reviews').insert({
+        'order_id': orderId,
+        'reviewer_id': userId,
+        'reviewee_id': revieweeId,
+        'item_id': itemId,
+        'rating': rating,
+        'comment': comment,
+      });
+      await loadReviews();
+      return true;
+    } catch (_) {
+      state = state.copyWith(isLoading: false);
+      rethrow;
+    }
   }
 }
 
 final reviewsProvider =
     StateNotifierProvider<ReviewsNotifier, ReviewsState>((ref) {
-  return ReviewsNotifier(ref);
+  return ReviewsNotifier();
 });

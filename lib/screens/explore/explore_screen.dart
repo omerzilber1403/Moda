@@ -8,7 +8,7 @@ import '../../models/models.dart';
 import '../../providers/browse_provider.dart';
 import '../../providers/likes_provider.dart';
 import '../../providers/wallet_provider.dart';
-import '../../services/mock_api.dart';
+import '../../providers/shop_provider.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/swipe_card.dart';
 import '../profile/buy_coins_sheet.dart';
@@ -20,12 +20,42 @@ class ExploreScreen extends ConsumerStatefulWidget {
   ConsumerState<ExploreScreen> createState() => _ExploreScreenState();
 }
 
-class _ExploreScreenState extends ConsumerState<ExploreScreen> {
+class _ExploreScreenState extends ConsumerState<ExploreScreen>
+    with SingleTickerProviderStateMixin {
   final CardSwiperController _swiperController = CardSwiperController();
   int _currentTopCardIndex = 0;
+  late final AnimationController _heartController;
+  late final Animation<double> _heartOpacity;
+  late final Animation<Offset> _heartSlide;
+
+  @override
+  void initState() {
+    super.initState();
+    _heartController = AnimationController(
+      duration: const Duration(milliseconds: 700),
+      vsync: this,
+    );
+    _heartOpacity = TweenSequence([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.0), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 30),
+    ]).animate(_heartController);
+    _heartSlide = Tween<Offset>(
+      begin: const Offset(0, -0.5),
+      end: const Offset(0, 0.3),
+    ).animate(CurvedAnimation(
+      parent: _heartController,
+      curve: Curves.easeOut,
+    ));
+  }
+
+  void _triggerHeartAnimation() {
+    _heartController.forward(from: 0);
+  }
 
   @override
   void dispose() {
+    _heartController.dispose();
     _swiperController.dispose();
     super.dispose();
   }
@@ -52,14 +82,14 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                 Text(
                   'Explore',
                   style: GoogleFonts.plusJakartaSans(
-                    color: AppColors.textPrimary,
+                    color: AppColors.onSurface,
                     fontSize: AppTypography.font2xl,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: AppTypography.letterSpacingTitle,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: AppTypography.letterSpacingHeadline,
                   ),
                 ),
                 const Spacer(),
-                // Coin balance badge
+                // Coin balance badge — tonal bg only, no border
                 GestureDetector(
                   onTap: () => showBuyCoinsSheet(context, ref),
                   child: Container(
@@ -68,12 +98,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                       vertical: AppSpacing.xs,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
+                      color: AppColors.primaryFixed,
                       borderRadius: BorderRadius.circular(AppRadius.full),
-                      border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.2),
-                        width: 1,
-                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -120,7 +146,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                       ref.read(browseProvider.notifier).filterByCategory(null),
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                ...MockApi.categories.map((cat) => Padding(
+                ...ref.watch(shopProvider).categories.map((cat) => Padding(
                       padding: const EdgeInsets.only(right: AppSpacing.sm),
                       child: _CategoryChip(
                         label: '${cat.icon ?? ''} ${cat.name}',
@@ -180,27 +206,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                                     ref
                                         .read(likesProvider.notifier)
                                         .likeItem(item.id);
-                                    ScaffoldMessenger.of(context)
-                                        .showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Added ${item.title} to likes!',
-                                          style: GoogleFonts.plusJakartaSans(
-                                              color: AppColors.white),
-                                        ),
-                                        backgroundColor:
-                                            AppColors.likeGreen,
-                                        behavior:
-                                            SnackBarBehavior.floating,
-                                        duration:
-                                            const Duration(seconds: 1),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(
-                                                  AppRadius.md),
-                                        ),
-                                      ),
-                                    );
+                                    _triggerHeartAnimation();
                                   }
                                   // Track the new top card index
                                   if (currentIndex != null) {
@@ -217,22 +223,47 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                                     percentThresholdX,
                                     percentThresholdY) {
                                   final item = browseState.items[index];
-                                  final owner =
-                                      MockApi.getUserById(item.ownerId);
                                   return SwipeCard(
                                     item: item,
-                                    owner: owner ??
-                                        User(
+                                    owner: item.owner ??
+                                        const AppUserRef(
                                           id: '',
-                                          email: '',
                                           displayName: 'Unknown',
-                                          createdAt: DateTime.now(),
                                         ),
                                     onCenterTap: () {
                                       context.push('/item/${item.id}');
                                     },
                                   );
                                 },
+                              ),
+                            ),
+                          ),
+
+                          // Flying heart animation
+                          Positioned(
+                            top: AppSpacing.xl,
+                            left: 0,
+                            right: 0,
+                            child: SlideTransition(
+                              position: _heartSlide,
+                              child: FadeTransition(
+                                opacity: _heartOpacity,
+                                child: Center(
+                                  child: Container(
+                                    width: 72,
+                                    height: 72,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.likeGreen
+                                          .withValues(alpha: 0.15),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.favorite_rounded,
+                                      color: AppColors.likeGreen,
+                                      size: 36,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -246,11 +277,11 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                               mainAxisAlignment:
                                   MainAxisAlignment.center,
                               children: [
-                                // Nope button
+                                // Skip button
                                 _GlassActionButton(
                                   icon: Icons.close_rounded,
-                                  iconColor: AppColors.nopeRed,
-                                  size: 56,
+                                  iconColor: AppColors.onSurfaceVariant,
+                                  size: 64,
                                   onTap: () => _swiperController
                                       .swipe(CardSwiperDirection.left),
                                 ),
@@ -259,8 +290,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                                 // Info button
                                 _GlassActionButton(
                                   icon: Icons.info_outline_rounded,
-                                  iconColor: AppColors.primary,
-                                  size: 44,
+                                  iconColor: AppColors.tertiary,
+                                  size: 48,
                                   onTap: () {
                                     if (browseState.items.isNotEmpty &&
                                         _currentTopCardIndex <
@@ -276,8 +307,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                                 // Like button
                                 _GlassActionButton(
                                   icon: Icons.favorite_rounded,
-                                  iconColor: AppColors.likeGreen,
-                                  size: 56,
+                                  iconColor: AppColors.primary,
+                                  size: 64,
                                   onTap: () => _swiperController
                                       .swipe(CardSwiperDirection.right),
                                 ),
@@ -320,24 +351,14 @@ class _GlassActionButton extends StatelessWidget {
             width: size,
             height: size,
             decoration: BoxDecoration(
-              color: AppColors.glassBackground,
+              color: AppColors.glassBackgroundLight,
               shape: BoxShape.circle,
-              border: Border.all(
-                color: AppColors.glassBorderLight,
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: iconColor.withValues(alpha: 0.2),
-                  blurRadius: AppSpacing.lg,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+              boxShadow: AppShadows.lg,
             ),
             child: Icon(
               icon,
               color: iconColor,
-              size: size * 0.45,
+              size: size * 0.42,
             ),
           ),
         ),
@@ -368,20 +389,15 @@ class _CategoryChip extends StatelessWidget {
           vertical: AppSpacing.sm,
         ),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : AppColors.surface,
+          color: isSelected ? AppColors.primaryFixed : AppColors.surfaceContainer,
           borderRadius: BorderRadius.circular(AppRadius.full),
-          border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.border,
-            width: 1,
-          ),
-          boxShadow: isSelected ? null : AppShadows.sm,
         ),
         child: Text(
           label,
           style: GoogleFonts.plusJakartaSans(
-            color: isSelected ? AppColors.white : AppColors.textSecondary,
+            color: isSelected ? AppColors.primary : AppColors.onSurfaceVariant,
             fontSize: AppTypography.fontSm,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
           ),
         ),
       ),

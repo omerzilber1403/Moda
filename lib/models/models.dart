@@ -8,3 +8,6 @@ export 'cart_item.dart';
 export 'address.dart';
 export 'review.dart';
 export 'app_notification.dart';
+export 'real_money_purchase.dart';
+export 'report.dart';
+export 'dispute.dart';

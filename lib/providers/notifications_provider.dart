@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../models/models.dart';
-import 'auth_provider.dart';
+import '../services/supabase_service.dart';
+import 'orders_provider.dart';
 
 class NotificationsState {
   final List<AppNotification> notifications;
@@ -26,85 +28,128 @@ class NotificationsState {
 
 class NotificationsNotifier extends StateNotifier<NotificationsState> {
   final Ref ref;
+  RealtimeChannel? _channel;
 
   NotificationsNotifier(this.ref) : super(const NotificationsState()) {
-    _loadMockNotifications();
+    loadNotifications();
   }
 
-  String? get _userId => ref.read(authProvider).user?.id;
+  String? get _userId => supabase.auth.currentUser?.id;
 
-  void _loadMockNotifications() {
+  static const _orderRelatedTypes = {
+    'new_message',
+    'order_update',
+    'order_ready',
+    'order_completed',
+    'order_cancelled',
+  };
+
+  Future<void> loadNotifications() async {
     final userId = _userId;
     if (userId == null) return;
-
-    state = NotificationsState(notifications: [
-      AppNotification(
-        id: 'notif-1',
-        userId: userId,
-        type: NotificationType.welcome,
-        title: 'Welcome to Moda!',
-        body: 'You received 50 Style Coins to start shopping second-hand fashion.',
-        createdAt: DateTime.now().subtract(const Duration(days: 2)),
-        isRead: true,
-      ),
-      AppNotification(
-        id: 'notif-2',
-        userId: userId,
-        type: NotificationType.orderUpdate,
-        title: 'Order Confirmed',
-        body: 'Your purchase of "Vintage Denim Jacket" has been confirmed. Chat with the seller to arrange pickup.',
-        routeTo: '/orders',
-        createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-      ),
-      AppNotification(
-        id: 'notif-3',
-        userId: userId,
-        type: NotificationType.newMessage,
-        title: 'New Message from Maya',
-        body: 'Hey! When would you like to pick up the jacket?',
-        imageUrl: 'https://picsum.photos/seed/avatar-maya/300/300',
-        createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-      ),
-      AppNotification(
-        id: 'notif-4',
-        userId: userId,
-        type: NotificationType.priceDropAlert,
-        title: 'Price Drop!',
-        body: 'An item in your wishlist "Oversized Blazer" dropped from 35 SC to 25 SC.',
-        routeTo: '/saved',
-        createdAt: DateTime.now().subtract(const Duration(hours: 1)),
-      ),
-      AppNotification(
-        id: 'notif-5',
-        userId: userId,
-        type: NotificationType.promotion,
-        title: 'Weekend Sale!',
-        body: 'Top up Style Coins this weekend and get 10% bonus coins on every purchase.',
-        createdAt: DateTime.now().subtract(const Duration(minutes: 30)),
-      ),
-    ]);
+    state = state.copyWith(isLoading: true);
+    try {
+      final data = await supabase
+          .from('notifications')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+      final notifications =
+          (data as List).map((e) => AppNotification.fromJson(e)).toList();
+      state = NotificationsState(notifications: notifications);
+      _subscribeToRealtime();
+    } catch (_) {
+      state = state.copyWith(isLoading: false);
+    }
   }
 
-  void markAsRead(String notifId) {
-    state = state.copyWith(
-      notifications: state.notifications.map((n) {
-        return n.id == notifId ? n.copyWith(isRead: true) : n;
-      }).toList(),
-    );
+  void _subscribeToRealtime() {
+    final userId = _userId;
+    if (userId == null) return;
+    _channel?.unsubscribe();
+    _channel = supabase
+        .channel('notifications-$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
+          callback: (payload) {
+            if (!mounted) return;
+            final newNotif = AppNotification.fromJson(payload.newRecord);
+            // Avoid duplicates
+            if (state.notifications.any((n) => n.id == newNotif.id)) return;
+            state = state.copyWith(
+              notifications: [newNotif, ...state.notifications],
+            );
+            // Refresh orders when an order-related notification arrives
+            final type = payload.newRecord['type'] as String?;
+            if (type != null && _orderRelatedTypes.contains(type)) {
+              ref.read(ordersProvider.notifier).refresh();
+            }
+          },
+        )
+        .subscribe();
   }
 
-  void markAllAsRead() {
-    state = state.copyWith(
-      notifications: state.notifications.map((n) {
-        return n.copyWith(isRead: true);
-      }).toList(),
-    );
+  Future<void> markAsRead(String notifId) async {
+    try {
+      await supabase
+          .from('notifications')
+          .update({'is_read': true}).eq('id', notifId);
+      state = state.copyWith(
+        notifications: state.notifications.map((n) {
+          return n.id == notifId ? n.copyWith(isRead: true) : n;
+        }).toList(),
+      );
+    } catch (_) {
+      // ignore
+    }
   }
 
-  void removeNotification(String notifId) {
-    state = state.copyWith(
-      notifications: state.notifications.where((n) => n.id != notifId).toList(),
-    );
+  Future<void> markAllAsRead() async {
+    final userId = _userId;
+    if (userId == null) return;
+    try {
+      await supabase
+          .from('notifications')
+          .update({'is_read': true}).eq('user_id', userId);
+      state = state.copyWith(
+        notifications: state.notifications.map((n) {
+          return n.copyWith(isRead: true);
+        }).toList(),
+      );
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  Future<void> removeNotification(String notifId) async {
+    try {
+      await supabase.from('notifications').delete().eq('id', notifId);
+      state = state.copyWith(
+        notifications:
+            state.notifications.where((n) => n.id != notifId).toList(),
+      );
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  void reset() {
+    _channel?.unsubscribe();
+    _channel = null;
+    state = const NotificationsState();
+  }
+
+  @override
+  void dispose() {
+    _channel?.unsubscribe();
+    super.dispose();
   }
 }
 

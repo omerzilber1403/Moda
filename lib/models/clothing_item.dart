@@ -10,6 +10,13 @@ enum ClothingType {
   final String label;
   final String icon;
   const ClothingType(this.value, this.label, this.icon);
+
+  static ClothingType fromValue(String value) {
+    return ClothingType.values.firstWhere(
+      (e) => e.value == value,
+      orElse: () => ClothingType.top,
+    );
+  }
 }
 
 class ClothingItem {
@@ -18,7 +25,7 @@ class ClothingItem {
   final String title;
   final String? description;
   final String? brand;
-  final String? size; // XS/S/M/L/XL/XXL for apparel, null for shoes/accessories
+  final String? size;
   final ClothingType clothingType;
   final int categoryId;
   final String condition;
@@ -27,7 +34,11 @@ class ClothingItem {
   final bool isActive;
   final DateTime createdAt;
   final int priceInCoins;
-  final Map<String, String> attributes; // type-specific extra fields
+  final Map<String, dynamic> attributes;
+  final DateTime? uploadDate;
+  final String? gender;
+  final String? pickupAddress;
+  final AppUserRef? owner;
 
   const ClothingItem({
     required this.id,
@@ -45,12 +56,70 @@ class ClothingItem {
     required this.priceInCoins,
     required this.createdAt,
     this.attributes = const {},
+    this.uploadDate,
+    this.gender,
+    this.pickupAddress,
+    this.owner,
   });
+
+  factory ClothingItem.fromJson(Map<String, dynamic> json) {
+    return ClothingItem(
+      id: json['id'] as String,
+      ownerId: json['owner_id'] as String,
+      title: json['title'] as String? ?? '',
+      description: json['description'] as String?,
+      brand: json['brand'] as String?,
+      size: json['size'] as String?,
+      clothingType: ClothingType.fromValue(
+          json['clothing_type'] as String? ?? 'top'),
+      categoryId: json['category_id'] as int? ?? 0,
+      condition: json['condition'] as String? ?? 'good',
+      color: json['color'] as String?,
+      images: (json['images'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          [],
+      isActive: json['is_active'] as bool? ?? true,
+      priceInCoins: json['price_in_coins'] as int? ?? 0,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String)
+          : DateTime.now(),
+      attributes: json['attributes'] is Map
+          ? Map<String, dynamic>.from(json['attributes'] as Map)
+          : {},
+      uploadDate: json['upload_date'] != null
+          ? DateTime.parse(json['upload_date'] as String)
+          : null,
+      gender: json['gender'] as String?,
+      pickupAddress: json['pickup_address'] as String?,
+      owner: json['owner'] is Map<String, dynamic>
+          ? AppUserRef.fromJson(json['owner'] as Map<String, dynamic>)
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'owner_id': ownerId,
+        'title': title,
+        if (description != null) 'description': description,
+        if (brand != null) 'brand': brand,
+        if (size != null) 'size': size,
+        'clothing_type': clothingType.value,
+        'category_id': categoryId,
+        'condition': condition,
+        if (color != null) 'color': color,
+        'images': images,
+        'is_active': isActive,
+        'price_in_coins': priceInCoins,
+        'attributes': attributes,
+        if (gender != null) 'gender': gender,
+        if (pickupAddress != null) 'pickup_address': pickupAddress,
+      };
 
   /// Returns a display-friendly size string based on clothing type.
   String get displaySize {
     if (clothingType == ClothingType.shoes) {
-      return attributes['shoe_size'] ?? '?';
+      return (attributes['shoe_size'] as String?) ?? '?';
     }
     return size ?? 'One Size';
   }
@@ -70,7 +139,11 @@ class ClothingItem {
     bool? isActive,
     int? priceInCoins,
     DateTime? createdAt,
-    Map<String, String>? attributes,
+    Map<String, dynamic>? attributes,
+    DateTime? uploadDate,
+    String? gender,
+    String? pickupAddress,
+    AppUserRef? owner,
   }) {
     return ClothingItem(
       id: id ?? this.id,
@@ -88,6 +161,34 @@ class ClothingItem {
       priceInCoins: priceInCoins ?? this.priceInCoins,
       createdAt: createdAt ?? this.createdAt,
       attributes: attributes ?? this.attributes,
+      uploadDate: uploadDate ?? this.uploadDate,
+      gender: gender ?? this.gender,
+      pickupAddress: pickupAddress ?? this.pickupAddress,
+      owner: owner ?? this.owner,
+    );
+  }
+}
+
+/// Lightweight user reference embedded in clothing item joins.
+class AppUserRef {
+  final String id;
+  final String displayName;
+  final String? avatarUrl;
+  final String? city;
+
+  const AppUserRef({
+    required this.id,
+    required this.displayName,
+    this.avatarUrl,
+    this.city,
+  });
+
+  factory AppUserRef.fromJson(Map<String, dynamic> json) {
+    return AppUserRef(
+      id: json['id'] as String,
+      displayName: json['display_name'] as String? ?? '',
+      avatarUrl: json['avatar_url'] as String?,
+      city: json['city'] as String?,
     );
   }
 }
@@ -104,6 +205,15 @@ class Category {
     required this.slug,
     this.icon,
   });
+
+  factory Category.fromJson(Map<String, dynamic> json) {
+    return Category(
+      id: json['id'] as int,
+      name: json['name'] as String,
+      slug: json['slug'] as String,
+      icon: json['icon'] as String?,
+    );
+  }
 }
 
 enum ItemCondition {

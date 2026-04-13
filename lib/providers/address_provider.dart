@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
-import 'auth_provider.dart';
+import '../services/supabase_service.dart';
 
 class AddressState {
   final List<Address> addresses;
@@ -28,77 +28,84 @@ class AddressState {
 }
 
 class AddressNotifier extends StateNotifier<AddressState> {
-  final Ref ref;
-
-  AddressNotifier(this.ref) : super(const AddressState()) {
-    _loadMockAddresses();
+  AddressNotifier() : super(const AddressState()) {
+    loadAddresses();
   }
 
-  String? get _userId => ref.read(authProvider).user?.id;
+  String? get _userId => supabase.auth.currentUser?.id;
 
-  void _loadMockAddresses() {
+  Future<void> loadAddresses() async {
     final userId = _userId;
     if (userId == null) return;
-
-    state = AddressState(addresses: [
-      Address(
-        id: 'addr-1',
-        userId: userId,
-        label: 'Home',
-        fullName: 'Alex Rivera',
-        phone: '+972 50-123-4567',
-        street: '42 Dizengoff Street',
-        city: 'Tel Aviv',
-        zipCode: '6433222',
-        isDefault: true,
-      ),
-      Address(
-        id: 'addr-2',
-        userId: userId,
-        label: 'Work',
-        fullName: 'Alex Rivera',
-        phone: '+972 50-123-4567',
-        street: '15 Rothschild Blvd',
-        city: 'Tel Aviv',
-        zipCode: '6688112',
-      ),
-    ]);
+    state = state.copyWith(isLoading: true);
+    try {
+      final data = await supabase
+          .from('addresses')
+          .select()
+          .eq('user_id', userId)
+          .order('is_default', ascending: false);
+      final addresses =
+          (data as List).map((e) => Address.fromJson(e)).toList();
+      state = AddressState(addresses: addresses);
+    } catch (_) {
+      state = state.copyWith(isLoading: false);
+    }
   }
 
   Future<void> addAddress(Address address) async {
+    final userId = _userId;
+    if (userId == null) return;
     state = state.copyWith(isLoading: true);
-    await Future.delayed(const Duration(milliseconds: 300));
-
-    final newAddress = address.copyWith(
-      id: 'addr-${DateTime.now().millisecondsSinceEpoch}',
-    );
-
-    List<Address> updated = [...state.addresses, newAddress];
-    if (newAddress.isDefault) {
-      updated = updated.map((a) {
-        return a.id == newAddress.id ? a : a.copyWith(isDefault: false);
-      }).toList();
+    try {
+      if (address.isDefault) {
+        // Unset other defaults
+        await supabase
+            .from('addresses')
+            .update({'is_default': false}).eq('user_id', userId);
+      }
+      await supabase.from('addresses').insert(
+            address.copyWith(userId: userId).toJson(),
+          );
+      await loadAddresses();
+    } catch (_) {
+      state = state.copyWith(isLoading: false);
     }
-
-    state = AddressState(addresses: updated);
   }
 
-  void setDefault(String addressId) {
-    state = state.copyWith(
-      addresses: state.addresses.map((a) {
-        return a.copyWith(isDefault: a.id == addressId);
-      }).toList(),
-    );
+  Future<void> setDefault(String addressId) async {
+    final userId = _userId;
+    if (userId == null) return;
+    try {
+      await supabase
+          .from('addresses')
+          .update({'is_default': false}).eq('user_id', userId);
+      await supabase
+          .from('addresses')
+          .update({'is_default': true}).eq('id', addressId);
+      state = state.copyWith(
+        addresses: state.addresses.map((a) {
+          return a.copyWith(isDefault: a.id == addressId);
+        }).toList(),
+      );
+    } catch (_) {
+      // ignore
+    }
   }
 
-  void removeAddress(String addressId) {
-    state = state.copyWith(
-      addresses: state.addresses.where((a) => a.id != addressId).toList(),
-    );
+  Future<void> removeAddress(String addressId) async {
+    try {
+      await supabase.from('addresses').delete().eq('id', addressId);
+      state = state.copyWith(
+        addresses:
+            state.addresses.where((a) => a.id != addressId).toList(),
+      );
+    } catch (_) {
+      // ignore
+    }
   }
 }
 
 final addressProvider =
     StateNotifierProvider<AddressNotifier, AddressState>((ref) {
-  return AddressNotifier(ref);
+  return AddressNotifier();
 });

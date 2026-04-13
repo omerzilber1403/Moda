@@ -1,14 +1,15 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../models/clothing_item.dart';
+import '../shop/filter_sheet.dart' show genderOptions, genderLabel;
 import '../../providers/items_provider.dart';
 import '../../services/image_compress_service.dart';
-import '../../services/mock_api.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show FileOptions;
+import '../../services/supabase_service.dart';
+import '../../providers/shop_provider.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/glass_button.dart';
 import '../../widgets/glass_input.dart';
@@ -30,8 +31,10 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
   String _selectedSize = 'M';
   int _selectedCategory = 1;
   String _selectedCondition = 'good';
+  String _selectedGender = 'unisex';
   final List<CompressedImage> _compressedImages = [];
   bool _isCompressing = false;
+  bool _isUploading = false;
 
   @override
   void dispose() {
@@ -97,7 +100,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
     setState(() => _compressedImages.removeAt(index));
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final price = int.tryParse(_priceController.text.trim());
     if (_titleController.text.isEmpty || _compressedImages.isEmpty || price == null || price <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -116,31 +119,58 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
       return;
     }
 
-    // TODO: Upload _compressedImages to Supabase Storage and get URLs
-    // For now, use placeholder URLs until Supabase upload service is wired
-    final placeholderUrls = _compressedImages.asMap().entries.map((e) =>
-      'https://picsum.photos/seed/upload${e.key}/400/600',
-    ).toList();
+    setState(() => _isUploading = true);
+    try {
+      final uid = supabase.auth.currentUser?.id;
+      if (uid == null) return;
 
-    ref.read(myItemsProvider.notifier).addItem(
-          title: _titleController.text,
-          description: _descController.text.isEmpty
-              ? null
-              : _descController.text,
-          brand: _brandController.text.isEmpty
-              ? null
-              : _brandController.text,
-          size: _selectedSize,
-          categoryId: _selectedCategory,
-          condition: _selectedCondition,
-          color: _colorController.text.isEmpty
-              ? null
-              : _colorController.text,
-          images: placeholderUrls,
-          priceInCoins: price,
+      // Upload each compressed image to Supabase Storage
+      final imageUrls = <String>[];
+      for (final img in _compressedImages) {
+        final path = '$uid/${DateTime.now().millisecondsSinceEpoch}_${img.filename}';
+        await supabase.storage
+            .from('item-images')
+            .uploadBinary(path, img.bytes,
+                fileOptions: FileOptions(contentType: 'image/jpeg', upsert: false));
+        final url = supabase.storage
+            .from('item-images')
+            .getPublicUrl(path);
+        imageUrls.add(url);
+      }
+
+      await ref.read(myItemsProvider.notifier).addItem(
+            title: _titleController.text,
+            description: _descController.text.isEmpty ? null : _descController.text,
+            brand: _brandController.text.isEmpty ? null : _brandController.text,
+            size: _selectedSize,
+            categoryId: _selectedCategory,
+            condition: _selectedCondition,
+            color: _colorController.text.isEmpty ? null : _colorController.text,
+            images: imageUrls,
+            priceInCoins: price,
+            gender: _selectedGender,
+          );
+
+      if (mounted) context.pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Upload failed. Please try again.',
+              style: GoogleFonts.plusJakartaSans(color: AppColors.white),
+            ),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+          ),
         );
-
-    context.pop();
+      }
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
   }
 
   @override
@@ -391,6 +421,52 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
             ),
             const SizedBox(height: AppSpacing.xxl),
 
+            _SectionLabel(label: 'Gender', icon: Icons.wc_outlined),
+            const SizedBox(height: AppSpacing.md),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: genderOptions.map((g) {
+                final selected = _selectedGender == g;
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedGender = g),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                      vertical: AppSpacing.sm,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected ? AppColors.primary : AppColors.surface,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(
+                        color: selected ? AppColors.primary : AppColors.border,
+                        width: 1,
+                      ),
+                      boxShadow: selected
+                          ? [
+                              BoxShadow(
+                                color: AppColors.primary.withValues(alpha: 0.25),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ]
+                          : AppShadows.sm,
+                    ),
+                    child: Text(
+                      genderLabel(g),
+                      style: GoogleFonts.plusJakartaSans(
+                        color: selected ? AppColors.white : AppColors.textSecondary,
+                        fontSize: AppTypography.fontSm,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: AppSpacing.xxl),
+
             _SectionLabel(label: 'Size', icon: Icons.straighten_outlined),
             const SizedBox(height: AppSpacing.md),
             Wrap(
@@ -442,7 +518,7 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
             Wrap(
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
-              children: MockApi.categories.map((cat) {
+              children: ref.watch(shopProvider).categories.map((cat) {
                 final selected = _selectedCategory == cat.id;
                 return GestureDetector(
                   onTap: () =>
@@ -549,9 +625,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen> {
             const SizedBox(height: AppSpacing.xxxl),
 
             GlassButton(
-              label: 'Upload Item',
-              icon: Icons.upload_rounded,
-              onPressed: _submit,
+              label: _isUploading ? 'Uploading…' : 'Upload Item',
+              icon: _isUploading ? Icons.hourglass_top_rounded : Icons.upload_rounded,
+              onPressed: _isUploading ? null : _submit,
               width: double.infinity,
             ),
             const SizedBox(height: AppSpacing.xxl),

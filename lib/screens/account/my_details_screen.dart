@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/supabase_service.dart';
 import '../../theme/tokens.dart';
 
 class MyDetailsScreen extends ConsumerStatefulWidget {
@@ -19,15 +20,40 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
   late TextEditingController _cityController;
   late TextEditingController _bioController;
 
+  late List<String> _selectedSizes;
+  late List<String> _selectedCategories;
+  String? _selectedGender;
+
+  bool _isSaving = false;
+
+  static const _allSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+  static const _allCategories = [
+    'Tops',
+    'Bottoms',
+    'Dresses',
+    'Outerwear',
+    'Shoes',
+    'Accessories',
+  ];
+  static const _genderOptions = [
+    'Male',
+    'Female',
+    'Non-binary',
+    'Prefer not to say',
+  ];
+
   @override
   void initState() {
     super.initState();
     final user = ref.read(authProvider).user;
     _nameController = TextEditingController(text: user?.displayName ?? '');
     _emailController = TextEditingController(text: user?.email ?? '');
-    _phoneController = TextEditingController(text: '');
+    _phoneController = TextEditingController(text: user?.phone ?? '');
     _cityController = TextEditingController(text: user?.city ?? '');
     _bioController = TextEditingController(text: user?.bio ?? '');
+    _selectedSizes = List<String>.from(user?.preferredSizes ?? []);
+    _selectedCategories = List<String>.from(user?.preferredCategories ?? []);
+    _selectedGender = user?.gender;
   }
 
   @override
@@ -38,6 +64,57 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
     _cityController.dispose();
     _bioController.dispose();
     super.dispose();
+  }
+
+  Future<void> _saveChanges() async {
+    setState(() => _isSaving = true);
+    try {
+      final uid = supabase.auth.currentUser?.id;
+      if (uid == null) return;
+      await supabase.from('profiles').update({
+        'display_name': _nameController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'city': _cityController.text.trim(),
+        'bio': _bioController.text.trim(),
+        'gender': _selectedGender,
+        'preferred_sizes': _selectedSizes,
+        'preferred_categories': _selectedCategories,
+      }).eq('id', uid);
+      await ref.read(authProvider.notifier).refreshProfile();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Profile updated',
+              style: GoogleFonts.plusJakartaSans(color: AppColors.white),
+            ),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to save: $e',
+              style: GoogleFonts.plusJakartaSans(color: AppColors.white),
+            ),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -73,6 +150,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
           vertical: AppSpacing.xl,
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Avatar with change photo overlay
             Center(
@@ -92,21 +170,10 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
                               width: 100,
                               height: 100,
                               fit: BoxFit.cover,
-                              errorWidget: (_, __, ___) => Container(
-                                width: 100,
-                                height: 100,
-                                color: AppColors.gray100,
-                                child: const Icon(Icons.person,
-                                    size: 48, color: AppColors.gray400),
-                              ),
+                              errorWidget: (_, __, ___) => _initialsAvatar(
+                                  user.displayName, 100),
                             )
-                          : Container(
-                              width: 100,
-                              height: 100,
-                              color: AppColors.gray100,
-                              child: const Icon(Icons.person,
-                                  size: 48, color: AppColors.gray400),
-                            ),
+                          : _initialsAvatar(user.displayName, 100),
                     ),
                   ),
                   Positioned(
@@ -152,7 +219,10 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
 
             const SizedBox(height: AppSpacing.xxl),
 
-            // Full Name
+            // ── Personal Information ──────────────────────────────
+            _sectionLabel('Personal Information'),
+            const SizedBox(height: AppSpacing.md),
+
             _buildField(
               label: 'Full Name',
               controller: _nameController,
@@ -161,7 +231,6 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
 
             const SizedBox(height: AppSpacing.lg),
 
-            // Email (read-only)
             _buildField(
               label: 'Email',
               controller: _emailController,
@@ -171,7 +240,6 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
 
             const SizedBox(height: AppSpacing.lg),
 
-            // Phone
             _buildField(
               label: 'Phone',
               controller: _phoneController,
@@ -182,7 +250,6 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
 
             const SizedBox(height: AppSpacing.lg),
 
-            // City
             _buildField(
               label: 'City',
               controller: _cityController,
@@ -192,7 +259,6 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
 
             const SizedBox(height: AppSpacing.lg),
 
-            // Bio
             _buildField(
               label: 'Bio',
               controller: _bioController,
@@ -203,51 +269,241 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
 
             const SizedBox(height: AppSpacing.xxl),
 
+            // ── Shopping Preferences ──────────────────────────────
+            _sectionLabel('Shopping Preferences'),
+            const SizedBox(height: AppSpacing.md),
+
+            // Gender
+            _prefLabel('Gender'),
+            const SizedBox(height: AppSpacing.sm),
+            DropdownButtonFormField<String>(
+              value: _selectedGender,
+              hint: Text(
+                'Select gender',
+                style: GoogleFonts.plusJakartaSans(
+                  color: AppColors.textTertiary,
+                  fontSize: AppTypography.fontMd,
+                ),
+              ),
+              items: _genderOptions
+                  .map((g) => DropdownMenuItem(
+                        value: g,
+                        child: Text(
+                          g,
+                          style: GoogleFonts.plusJakartaSans(
+                            color: AppColors.textPrimary,
+                            fontSize: AppTypography.fontMd,
+                          ),
+                        ),
+                      ))
+                  .toList(),
+              onChanged: (val) => setState(() => _selectedGender = val),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: AppColors.surface,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                  vertical: AppSpacing.md,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  borderSide:
+                      const BorderSide(color: AppColors.border, width: 1),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  borderSide:
+                      const BorderSide(color: AppColors.border, width: 1),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  borderSide:
+                      const BorderSide(color: AppColors.primary, width: 1.5),
+                ),
+              ),
+              dropdownColor: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+            ),
+
+            const SizedBox(height: AppSpacing.lg),
+
+            // Preferred Sizes
+            _prefLabel('Preferred Sizes'),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: _allSizes.map((size) {
+                final selected = _selectedSizes.contains(size);
+                return FilterChip(
+                  label: Text(
+                    size,
+                    style: GoogleFonts.plusJakartaSans(
+                      color: selected
+                          ? AppColors.primary
+                          : AppColors.textSecondary,
+                      fontSize: AppTypography.fontSm,
+                      fontWeight:
+                          selected ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                  selected: selected,
+                  onSelected: (val) {
+                    setState(() {
+                      if (val) {
+                        _selectedSizes.add(size);
+                      } else {
+                        _selectedSizes.remove(size);
+                      }
+                    });
+                  },
+                  selectedColor: AppColors.primaryLight,
+                  backgroundColor: AppColors.surface,
+                  checkmarkColor: AppColors.primary,
+                  side: BorderSide(
+                    color: selected ? AppColors.primary : AppColors.border,
+                    width: 1,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.full),
+                  ),
+                  showCheckmark: false,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                );
+              }).toList(),
+            ),
+
+            const SizedBox(height: AppSpacing.lg),
+
+            // Preferred Categories
+            _prefLabel('Preferred Categories'),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: _allCategories.map((cat) {
+                final selected = _selectedCategories.contains(cat);
+                return FilterChip(
+                  label: Text(
+                    cat,
+                    style: GoogleFonts.plusJakartaSans(
+                      color: selected
+                          ? AppColors.primary
+                          : AppColors.textSecondary,
+                      fontSize: AppTypography.fontSm,
+                      fontWeight:
+                          selected ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                  selected: selected,
+                  onSelected: (val) {
+                    setState(() {
+                      if (val) {
+                        _selectedCategories.add(cat);
+                      } else {
+                        _selectedCategories.remove(cat);
+                      }
+                    });
+                  },
+                  selectedColor: AppColors.primaryLight,
+                  backgroundColor: AppColors.surface,
+                  checkmarkColor: AppColors.primary,
+                  side: BorderSide(
+                    color: selected ? AppColors.primary : AppColors.border,
+                    width: 1,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.full),
+                  ),
+                  showCheckmark: false,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                );
+              }).toList(),
+            ),
+
+            const SizedBox(height: AppSpacing.xxl),
+
             // Save button
             SizedBox(
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Profile updated',
-                        style: GoogleFonts.plusJakartaSans(
-                          color: AppColors.white,
-                        ),
-                      ),
-                      backgroundColor: AppColors.success,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppRadius.sm),
-                      ),
-                    ),
-                  );
-                },
+                onPressed: _isSaving ? null : _saveChanges,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.white,
+                  disabledBackgroundColor:
+                      AppColors.primary.withValues(alpha: 0.5),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(AppRadius.lg),
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
                   ),
                 ),
-                child: Text(
-                  'Save Changes',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: AppTypography.fontMd,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.white,
+                        ),
+                      )
+                    : Text(
+                        'Save Changes',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: AppTypography.fontMd,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
               ),
             ),
 
             const SizedBox(height: AppSpacing.xl),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _initialsAvatar(String name, double size) {
+    return Container(
+      width: size,
+      height: size,
+      color: AppColors.primaryLight,
+      child: Center(
+        child: Text(
+          name.isNotEmpty ? name[0].toUpperCase() : '?',
+          style: GoogleFonts.plusJakartaSans(
+            color: AppColors.primary,
+            fontSize: size * 0.36,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String text) {
+    return Text(
+      text,
+      style: GoogleFonts.plusJakartaSans(
+        color: AppColors.textPrimary,
+        fontSize: AppTypography.fontMd,
+        fontWeight: FontWeight.bold,
+        letterSpacing: AppTypography.letterSpacingTitle,
+      ),
+    );
+  }
+
+  Widget _prefLabel(String text) {
+    return Text(
+      text,
+      style: GoogleFonts.plusJakartaSans(
+        color: AppColors.textSecondary,
+        fontSize: AppTypography.fontXs,
+        fontWeight: FontWeight.w600,
       ),
     );
   }

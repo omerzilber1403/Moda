@@ -9,7 +9,6 @@ import '../../providers/browse_provider.dart';
 import '../../providers/likes_provider.dart';
 import '../../providers/orders_provider.dart';
 import '../../providers/wallet_provider.dart';
-import '../../services/mock_api.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/glass_button.dart';
@@ -83,12 +82,12 @@ class _LikesScreenState extends ConsumerState<LikesScreen> {
                     const SizedBox(width: AppSpacing.md),
                   ],
                   Text(
-                    'Liked Items',
+                    'Saved',
                     style: GoogleFonts.plusJakartaSans(
-                      color: AppColors.textPrimary,
+                      color: AppColors.onSurface,
                       fontSize: AppTypography.font2xl,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: AppTypography.letterSpacingTitle,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: AppTypography.letterSpacingHeadline,
                     ),
                   ),
                   const Spacer(),
@@ -174,12 +173,11 @@ class _LikesScreenState extends ConsumerState<LikesScreen> {
                       itemCount: sorted.length,
                       itemBuilder: (context, index) {
                         final item = sorted[index];
-                        final owner = MockApi.getUserById(item.ownerId);
                         return _LikedItemCard(
                           item: item,
-                          ownerName: owner?.displayName ?? 'Unknown',
+                          ownerName: item.owner?.displayName ?? 'Unknown',
                           onTap: () =>
-                              _showItemDetail(context, ref, item, owner),
+                              _showItemDetail(context, ref, item, item.owner),
                           onRemove: () => ref
                               .read(likesProvider.notifier)
                               .removeItem(item.id),
@@ -197,7 +195,7 @@ class _LikesScreenState extends ConsumerState<LikesScreen> {
     BuildContext context,
     WidgetRef ref,
     ClothingItem item,
-    User? owner,
+    AppUserRef? owner,
   ) {
     showModalBottomSheet(
       context: context,
@@ -371,7 +369,7 @@ class _LikedItemCard extends StatelessWidget {
 
 class _ItemDetailSheet extends ConsumerWidget {
   final ClothingItem item;
-  final User? owner;
+  final AppUserRef? owner;
 
   const _ItemDetailSheet({required this.item, this.owner});
 
@@ -478,47 +476,34 @@ class _ItemDetailSheet extends ConsumerWidget {
                     Container(
                       padding: const EdgeInsets.all(AppSpacing.md),
                       decoration: BoxDecoration(
-                        color: AppColors.background,
+                        color: AppColors.surfaceContainerLow,
                         borderRadius: BorderRadius.circular(AppRadius.lg),
-                        border: Border.all(
-                          color: AppColors.border,
-                          width: 1,
-                        ),
                       ),
                       child: Row(
                         children: [
-                          Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: AppColors.border,
-                                width: 1,
-                              ),
-                            ),
-                            child: ClipOval(
-                              child: owner!.avatarUrl != null
-                                  ? CachedNetworkImage(
-                                      imageUrl: owner!.avatarUrl!,
+                          ClipOval(
+                            child: owner!.avatarUrl != null
+                                ? CachedNetworkImage(
+                                    imageUrl: owner!.avatarUrl!,
+                                    width: 36,
+                                    height: 36,
+                                    fit: BoxFit.cover,
+                                    errorWidget: (_, __, ___) => Container(
                                       width: 36,
                                       height: 36,
-                                      fit: BoxFit.cover,
-                                      errorWidget: (_, __, ___) => Container(
-                                        width: 36,
-                                        height: 36,
-                                        color: AppColors.gray100,
-                                        child: const Icon(Icons.person,
-                                            size: 16,
-                                            color: AppColors.gray400),
-                                      ),
-                                    )
-                                  : Container(
-                                      width: 36,
-                                      height: 36,
-                                      color: AppColors.gray100,
+                                      color: AppColors.surfaceContainerHigh,
                                       child: const Icon(Icons.person,
-                                          size: 16, color: AppColors.gray400),
+                                          size: 16,
+                                          color: AppColors.onSurfaceVariant),
                                     ),
-                            ),
+                                  )
+                                : Container(
+                                    width: 36,
+                                    height: 36,
+                                    color: AppColors.surfaceContainerHigh,
+                                    child: const Icon(Icons.person,
+                                        size: 16, color: AppColors.onSurfaceVariant),
+                                  ),
                           ),
                           const SizedBox(width: AppSpacing.md),
                           Expanded(
@@ -638,17 +623,12 @@ class _ItemDetailSheet extends ConsumerWidget {
     }
 
     final order =
-        await ref.read(walletProvider.notifier).purchaseItem(item.id);
+        await ref.read(walletProvider.notifier).lockCoinsForOrder(item.id);
     if (order != null && context.mounted) {
       // Remove from likes, refresh data
       ref.read(likesProvider.notifier).removeItem(item.id);
       ref.read(browseProvider.notifier).loadItems();
       ref.read(ordersProvider.notifier).refresh();
-      ref.read(authProvider.notifier).loginAs(
-            MockApi.getUserById(
-                    ref.read(authProvider).user?.id ?? 'user-me') ??
-                ref.read(authProvider).user!,
-          );
       Navigator.of(context).pop();
       context.push('/chat/${order.id}');
     }
@@ -706,12 +686,8 @@ class _InfoChip extends StatelessWidget {
         vertical: 3,
       ),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: AppColors.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(
-          color: AppColors.border,
-          width: 1,
-        ),
       ),
       child: Text(
         label,

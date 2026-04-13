@@ -5,24 +5,76 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/models.dart';
-import '../../providers/auth_provider.dart';
-import '../../providers/browse_provider.dart';
 import '../../providers/likes_provider.dart';
-import '../../providers/orders_provider.dart';
 import '../../providers/wallet_provider.dart';
-import '../../services/mock_api.dart';
+import '../../providers/shop_provider.dart';
+import '../../services/supabase_service.dart';
 import '../../theme/tokens.dart';
-import '../profile/buy_coins_sheet.dart';
 
-class ItemDetailScreen extends ConsumerWidget {
+class ItemDetailScreen extends ConsumerStatefulWidget {
   final String itemId;
 
   const ItemDetailScreen({super.key, required this.itemId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final item = MockApi.getItemById(itemId);
+  ConsumerState<ItemDetailScreen> createState() => _ItemDetailScreenState();
+}
 
+class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> {
+  ClothingItem? _item;
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadItem();
+  }
+
+  Future<void> _loadItem() async {
+    try {
+      final data = await supabase
+          .from('clothing_items')
+          .select('*, owner:profiles!clothing_items_owner_id_fkey(*)')
+          .eq('id', widget.itemId)
+          .single();
+      if (mounted) {
+        setState(() {
+          _item = ClothingItem.fromJson(data);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        final msg = e.toString().toLowerCase();
+        String? error;
+        if (msg.contains('network') || msg.contains('socket') || msg.contains('connection') || msg.contains('failed host lookup')) {
+          error = 'Connection error. Check your internet and try again.';
+        }
+        // If no specific network error, _item stays null -> shows "not found"
+        setState(() {
+          _isLoading = false;
+          _errorMessage = error;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: CircularProgressIndicator(
+            color: AppColors.primary,
+            strokeWidth: 2,
+          ),
+        ),
+      );
+    }
+
+    final item = _item;
     if (item == null) {
       return Scaffold(
         backgroundColor: AppColors.background,
@@ -39,9 +91,20 @@ class ItemDetailScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              const Expanded(
+              Expanded(
                 child: Center(
-                  child: _NotFoundMessage(),
+                  child: _errorMessage != null
+                      ? _ErrorMessage(
+                          message: _errorMessage!,
+                          onRetry: () {
+                            setState(() {
+                              _isLoading = true;
+                              _errorMessage = null;
+                            });
+                            _loadItem();
+                          },
+                        )
+                      : const _NotFoundMessage(),
                 ),
               ),
             ],
@@ -50,11 +113,9 @@ class ItemDetailScreen extends ConsumerWidget {
       );
     }
 
-    final owner = MockApi.getUserById(item.ownerId);
-
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: _ItemDetailBody(item: item, owner: owner),
+      body: _ItemDetailBody(item: item, owner: item.owner),
     );
   }
 }
@@ -94,9 +155,70 @@ class _NotFoundMessage extends StatelessWidget {
   }
 }
 
+class _ErrorMessage extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _ErrorMessage({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.wifi_off_rounded,
+          size: 56,
+          color: AppColors.textTertiary,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Text(
+          'Oops!',
+          style: GoogleFonts.plusJakartaSans(
+            color: AppColors.textPrimary,
+            fontSize: AppTypography.fontLg,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: GoogleFonts.plusJakartaSans(
+            color: AppColors.textSecondary,
+            fontSize: AppTypography.fontSm,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        GestureDetector(
+          onTap: onRetry,
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl,
+              vertical: AppSpacing.md,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+            child: Text(
+              'Retry',
+              style: GoogleFonts.plusJakartaSans(
+                color: AppColors.white,
+                fontSize: AppTypography.fontSm,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _ItemDetailBody extends ConsumerStatefulWidget {
   final ClothingItem item;
-  final User? owner;
+  final AppUserRef? owner;
 
   const _ItemDetailBody({required this.item, this.owner});
 
@@ -249,7 +371,10 @@ class _ItemDetailBodyState extends ConsumerState<_ItemDetailBody> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.md),
-                      _SellerRow(owner: widget.owner!),
+                      GestureDetector(
+                        onTap: () => context.push('/seller/${widget.owner!.id}'),
+                        child: _SellerRow(owner: widget.owner!),
+                      ),
                     ],
 
                     // Bottom padding to clear the sticky CTA bar
@@ -271,7 +396,7 @@ class _ItemDetailBodyState extends ConsumerState<_ItemDetailBody> {
             isLiked: isLiked,
             isLoading: walletState.isLoading,
             onToggleLike: () => _toggleLike(isLiked),
-            onBuy: () => _handlePurchase(context, ref),
+            onBuy: () => _handleBuyNow(context),
             bottomPadding: bottomPadding,
           ),
         ),
@@ -287,44 +412,8 @@ class _ItemDetailBodyState extends ConsumerState<_ItemDetailBody> {
     }
   }
 
-  Future<void> _handlePurchase(BuildContext context, WidgetRef ref) async {
-    final walletState = ref.read(walletProvider);
-
-    if (walletState.balance < widget.item.priceInCoins) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Not enough Style Coins!',
-            style: GoogleFonts.plusJakartaSans(color: AppColors.white),
-          ),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-          ),
-          action: SnackBarAction(
-            label: 'Buy More',
-            textColor: AppColors.white,
-            onPressed: () => showBuyCoinsSheet(context, ref),
-          ),
-        ),
-      );
-      return;
-    }
-
-    final order =
-        await ref.read(walletProvider.notifier).purchaseItem(widget.item.id);
-    if (order != null && context.mounted) {
-      ref.read(likesProvider.notifier).removeItem(widget.item.id);
-      ref.read(browseProvider.notifier).loadItems();
-      ref.read(ordersProvider.notifier).refresh();
-      ref.read(authProvider.notifier).loginAs(
-            MockApi.getUserById(
-                    ref.read(authProvider).user?.id ?? 'user-me') ??
-                ref.read(authProvider).user!,
-          );
-      context.push('/chat/${order.id}');
-    }
+  void _handleBuyNow(BuildContext context) {
+    context.push('/confirm-order', extra: {'item': widget.item});
   }
 }
 
@@ -449,7 +538,19 @@ class _ImageSection extends StatelessWidget {
             child: _CircleButton(
               icon: Icons.ios_share_rounded,
               onPressed: () {
-                // Share functionality placeholder
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Share link copied!',
+                      style: GoogleFonts.plusJakartaSans(color: AppColors.white),
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
               },
             ),
           ),
@@ -631,7 +732,7 @@ class _InfoChip extends StatelessWidget {
 // Details section — two-column grid of label:value pairs
 // ---------------------------------------------------------------------------
 
-class _DetailsSection extends StatelessWidget {
+class _DetailsSection extends ConsumerWidget {
   final ClothingItem item;
 
   const _DetailsSection({required this.item});
@@ -670,8 +771,9 @@ class _DetailsSection extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final category = MockApi.getCategoryById(item.categoryId);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final categories = ref.watch(shopProvider).categories;
+    final category = categories.where((c) => c.id == item.categoryId).firstOrNull;
 
     // Build the list of detail entries
     final List<MapEntry<String, String>> details = [];
@@ -696,7 +798,7 @@ class _DetailsSection extends StatelessWidget {
       if (entry.key == 'shoe_size') continue;
       details.add(MapEntry(
         _formatAttributeKey(entry.key),
-        entry.value,
+        entry.value.toString(),
       ));
     }
 
@@ -797,7 +899,7 @@ class _DetailPair extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _SellerRow extends StatelessWidget {
-  final User owner;
+  final AppUserRef owner;
 
   const _SellerRow({required this.owner});
 

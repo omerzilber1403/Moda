@@ -9,7 +9,8 @@ import '../../providers/items_provider.dart';
 import '../../providers/likes_provider.dart';
 import '../../providers/wallet_provider.dart';
 import '../../providers/orders_provider.dart';
-import '../../services/mock_api.dart';
+import '../../providers/review_provider.dart';
+import '../../utils/helpers.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/glass_button.dart';
 import '../../widgets/glass_card.dart';
@@ -64,59 +65,51 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                   const Spacer(),
                   // Settings icon button
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: AppColors.background,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.border, width: 1),
-                    ),
-                    child: const Icon(
-                      Icons.settings_outlined,
-                      color: AppColors.textSecondary,
-                      size: 18,
+                  GestureDetector(
+                    onTap: () => context.push('/account'),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceContainerHigh,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.settings_outlined,
+                        color: AppColors.onSurfaceVariant,
+                        size: 18,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
 
-            // Thin top border
-            Container(height: 1, color: AppColors.border),
-
+            // Tonal divider via spacing — no 1px line
             const SizedBox(height: AppSpacing.xl),
 
-            // Avatar — centered, thin gray ring
+            // Avatar — 80px diameter, tonal background, no border
             Center(
-              child: Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppColors.border,
-                    width: 1,
-                  ),
-                ),
-                child: ClipOval(
-                  child: user.avatarUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl: user.avatarUrl!,
-                          width: 108,
-                          height: 108,
-                          fit: BoxFit.cover,
-                          errorWidget: (_, __, ___) => Container(
-                            color: AppColors.gray100,
-                            child: const Icon(Icons.person, size: 52, color: AppColors.gray400),
-                          ),
-                        )
-                      : Container(
-                          width: 108,
-                          height: 108,
-                          color: AppColors.gray100,
-                          child: const Icon(Icons.person, size: 52, color: AppColors.gray400),
+              child: ClipOval(
+                child: user.avatarUrl != null
+                    ? CachedNetworkImage(
+                        imageUrl: user.avatarUrl!,
+                        width: 80,
+                        height: 80,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, __, ___) => Container(
+                          width: 80,
+                          height: 80,
+                          color: AppColors.surfaceContainerHigh,
+                          child: const Icon(Icons.person, size: 40, color: AppColors.onSurfaceVariant),
                         ),
-                ),
+                      )
+                    : Container(
+                        width: 80,
+                        height: 80,
+                        color: AppColors.surfaceContainerHigh,
+                        child: const Icon(Icons.person, size: 40, color: AppColors.onSurfaceVariant),
+                      ),
               ),
             ),
 
@@ -185,7 +178,7 @@ class ProfileScreen extends ConsumerWidget {
                         Container(
                           width: 1,
                           height: 40,
-                          color: AppColors.border,
+                          color: AppColors.surfaceContainerHighest,
                         ),
                         _StatColumn(
                           label: 'Sales',
@@ -194,7 +187,7 @@ class ProfileScreen extends ConsumerWidget {
                         Container(
                           width: 1,
                           height: 40,
-                          color: AppColors.border,
+                          color: AppColors.surfaceContainerHighest,
                         ),
                         _StatColumn(
                           label: 'Balance',
@@ -210,17 +203,6 @@ class ProfileScreen extends ConsumerWidget {
                     label: 'Upload Item',
                     icon: Icons.add_photo_alternate_outlined,
                     onPressed: () => context.push('/upload'),
-                    width: double.infinity,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-
-                  // Switch User button
-                  GlassButton(
-                    label: 'Switch User',
-                    variant: GlassButtonVariant.outline,
-                    icon: Icons.swap_horiz_rounded,
-                    onPressed: () =>
-                        ref.read(authProvider.notifier).logout(),
                     width: double.infinity,
                   ),
                   const SizedBox(height: AppSpacing.xxl),
@@ -323,10 +305,9 @@ class ProfileScreen extends ConsumerWidget {
                       itemCount: likedItems.length.clamp(0, 4),
                       itemBuilder: (context, index) {
                         final item = likedItems[index];
-                        final owner = MockApi.getUserById(item.ownerId);
                         return _LikedItemCard(
                           item: item,
-                          ownerName: owner?.displayName ?? 'Unknown',
+                          ownerName: item.owner?.displayName ?? 'Unknown',
                           onTap: () => context.push('/item/${item.id}'),
                           onRemove: () => ref
                               .read(likesProvider.notifier)
@@ -402,17 +383,13 @@ class ProfileScreen extends ConsumerWidget {
                           vertical: AppSpacing.xs,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: AppColors.surfaceContainerHigh,
                           borderRadius: BorderRadius.circular(AppRadius.full),
-                          border: Border.all(
-                            color: AppColors.border,
-                            width: 1,
-                          ),
                         ),
                         child: Text(
                           '${allOrders.length} orders',
                           style: GoogleFonts.plusJakartaSans(
-                            color: AppColors.textSecondary,
+                            color: AppColors.onSurfaceVariant,
                             fontSize: AppTypography.fontXs,
                             fontWeight: FontWeight.w500,
                           ),
@@ -435,15 +412,14 @@ class ProfileScreen extends ConsumerWidget {
                 child: Container(
                   height: 80,
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: AppColors.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(AppRadius.xl),
-                    border: Border.all(color: AppColors.border, width: 1),
                   ),
                   child: Center(
                     child: Text(
                       'No orders yet',
                       style: GoogleFonts.plusJakartaSans(
-                        color: AppColors.textTertiary,
+                        color: AppColors.outline,
                         fontSize: AppTypography.fontSm,
                       ),
                     ),
@@ -481,17 +457,13 @@ class ProfileScreen extends ConsumerWidget {
                       vertical: AppSpacing.xs,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: AppColors.surfaceContainerHigh,
                       borderRadius: BorderRadius.circular(AppRadius.full),
-                      border: Border.all(
-                        color: AppColors.border,
-                        width: 1,
-                      ),
                     ),
                     child: Text(
                       '${myItems.length} items',
                       style: GoogleFonts.plusJakartaSans(
-                        color: AppColors.textSecondary,
+                        color: AppColors.onSurfaceVariant,
                         fontSize: AppTypography.fontXs,
                         fontWeight: FontWeight.w500,
                       ),
@@ -523,7 +495,9 @@ class ProfileScreen extends ConsumerWidget {
                       itemCount: myItems.length,
                       itemBuilder: (context, index) {
                         final item = myItems[index];
-                        return Container(
+                        return GestureDetector(
+                          onTap: () => context.push('/item/${item.id}'),
+                          child: Container(
                           decoration: BoxDecoration(
                             borderRadius:
                                 BorderRadius.circular(AppRadius.xxl),
@@ -586,13 +560,9 @@ class ProfileScreen extends ConsumerWidget {
                                       vertical: 3,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: AppColors.glassBackground,
+                                      color: AppColors.glassBackgroundLight,
                                       borderRadius: BorderRadius.circular(
                                           AppRadius.full),
-                                      border: Border.all(
-                                        color: AppColors.glassBorderLight,
-                                        width: 0.5,
-                                      ),
                                     ),
                                     child: Text(
                                       item.clothingType.icon,
@@ -603,10 +573,74 @@ class ProfileScreen extends ConsumerWidget {
                               ],
                             ),
                           ),
+                        ),
                         );
                       },
                     ),
             ),
+
+            // ── Reviews section ──────────────────────────────
+            Builder(builder: (context) {
+              ref.watch(reviewsProvider);
+              final myReviews = ref.read(reviewsProvider.notifier).getReviewsForUser(user.id);
+              if (myReviews.isEmpty) return const SizedBox.shrink();
+
+              final avgRating = myReviews.map((r) => r.rating).reduce((a, b) => a + b) / myReviews.length;
+              final displayReviews = myReviews.take(3).toList();
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: AppSpacing.xxl),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppLayout.screenPaddingH,
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Reviews',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: AppColors.textPrimary,
+                            fontSize: AppTypography.fontLg,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: AppTypography.letterSpacingTitle,
+                          ),
+                        ),
+                        const Spacer(),
+                        const Icon(
+                          Icons.star_rounded,
+                          color: AppColors.primary,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          '${avgRating.toStringAsFixed(1)} · ${myReviews.length} reviews',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: AppColors.textSecondary,
+                            fontSize: AppTypography.fontXs,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppLayout.screenPaddingH,
+                    ),
+                    child: Column(
+                      children: [
+                        for (int i = 0; i < displayReviews.length; i++) ...[
+                          if (i > 0) const SizedBox(height: AppSpacing.sm),
+                          _ReviewTile(review: displayReviews[i]),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }),
 
             // Transaction history
             if (walletState.transactions.isNotEmpty) ...[
@@ -633,12 +667,8 @@ class ProfileScreen extends ConsumerWidget {
                         vertical: AppSpacing.xs,
                       ),
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
+                        color: AppColors.surfaceContainerHigh,
                         borderRadius: BorderRadius.circular(AppRadius.full),
-                        border: Border.all(
-                          color: AppColors.border,
-                          width: 1,
-                        ),
                       ),
                       child: Text(
                         '${walletState.transactions.length} transactions',
@@ -787,6 +817,8 @@ class _LikedItemCard extends StatelessWidget {
   }
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+
 class _TransactionTile extends StatelessWidget {
   final Transaction transaction;
 
@@ -903,9 +935,8 @@ class _EmptyItems extends StatelessWidget {
     return Container(
       height: 160,
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(AppRadius.xxl),
-        border: Border.all(color: AppColors.border, width: 1),
       ),
       child: Center(
         child: Column(
@@ -952,6 +983,88 @@ class _EmptyItems extends StatelessWidget {
   }
 }
 
+class _ReviewTile extends StatelessWidget {
+  final Review review;
+
+  const _ReviewTile({required this.review});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Reviewer row: avatar + name + date
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: AppColors.surfaceContainerHigh,
+                child: const Icon(
+                  Icons.person,
+                  size: 18,
+                  color: AppColors.outline,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                'Verified Buyer',
+                style: GoogleFonts.plusJakartaSans(
+                  color: AppColors.textPrimary,
+                  fontSize: AppTypography.fontXs,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                formatRelativeTime(review.createdAt),
+                style: GoogleFonts.plusJakartaSans(
+                  color: AppColors.outline,
+                  fontSize: AppTypography.fontXs,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          // Star row
+          Row(
+            children: List.generate(5, (index) {
+              return Icon(
+                Icons.star_rounded,
+                size: 14,
+                color: (index + 1) <= review.rating
+                    ? AppColors.primary
+                    : AppColors.outlineVariant,
+              );
+            }),
+          ),
+          if (review.comment.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              review.comment,
+              style: GoogleFonts.plusJakartaSans(
+                color: AppColors.textSecondary,
+                fontSize: AppTypography.fontSm,
+                height: AppTypography.lineHeightNormal,
+              ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _OrderTile extends StatelessWidget {
   final OrderDetail orderDetail;
   final VoidCallback onTap;
@@ -963,12 +1076,14 @@ class _OrderTile extends StatelessWidget {
     final statusColor = switch (orderDetail.order.status) {
       OrderStatus.pending => AppColors.warning,
       OrderStatus.confirmed => AppColors.primary,
+      OrderStatus.readyForPickup => const Color(0xFF2E7D32),
       OrderStatus.completed => AppColors.success,
       OrderStatus.cancelled => AppColors.error,
     };
     final statusLabel = switch (orderDetail.order.status) {
       OrderStatus.pending => 'Pending',
       OrderStatus.confirmed => 'Confirmed',
+      OrderStatus.readyForPickup => 'Ready for Pickup',
       OrderStatus.completed => 'Completed',
       OrderStatus.cancelled => 'Cancelled',
     };
@@ -1071,6 +1186,18 @@ class _OrderTile extends StatelessWidget {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      orderDetail.isBuyer
+                          ? 'from ${orderDetail.otherUser.displayName}'
+                          : 'to ${orderDetail.otherUser.displayName}',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: AppColors.textTertiary,
+                        fontSize: AppTypography.fontXs,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),

@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
-import '../services/mock_api.dart';
-import 'auth_provider.dart';
+import '../services/supabase_service.dart';
 
 class CartState {
   final List<CartItem> items;
@@ -25,8 +24,9 @@ class CartState {
   int get totalCoins {
     int total = 0;
     for (final cartItem in items) {
-      final item = MockApi.getItemById(cartItem.itemId);
-      if (item != null) total += item.priceInCoins * cartItem.quantity;
+      if (cartItem.item != null) {
+        total += cartItem.item!.priceInCoins;
+      }
     }
     return total;
   }
@@ -35,31 +35,56 @@ class CartState {
 }
 
 class CartNotifier extends StateNotifier<CartState> {
-  final Ref ref;
-
-  CartNotifier(this.ref) : super(const CartState());
-
-  String? get _userId => ref.read(authProvider).user?.id;
-
-  void addItem(String itemId) {
-    final userId = _userId;
-    if (userId == null) return;
-
-    final exists = state.items.any((c) => c.itemId == itemId);
-    if (exists) return;
-
-    final newItem = CartItem(
-      id: 'cart-${DateTime.now().millisecondsSinceEpoch}',
-      itemId: itemId,
-      userId: userId,
-    );
-    state = state.copyWith(items: [...state.items, newItem]);
+  CartNotifier() : super(const CartState()) {
+    loadCart();
   }
 
-  void removeItem(String itemId) {
-    state = state.copyWith(
-      items: state.items.where((c) => c.itemId != itemId).toList(),
-    );
+  Future<void> loadCart() async {
+    final uid = supabase.auth.currentUser?.id;
+    if (uid == null) return;
+    state = state.copyWith(isLoading: true);
+    try {
+      final data = await supabase
+          .from('cart_items')
+          .select('*, item:clothing_items(*)')
+          .eq('user_id', uid);
+      final items =
+          (data as List).map((e) => CartItem.fromJson(e)).toList();
+      state = CartState(items: items);
+    } catch (_) {
+      state = state.copyWith(isLoading: false);
+    }
+  }
+
+  Future<void> addItem(String itemId) async {
+    final uid = supabase.auth.currentUser?.id;
+    if (uid == null) return;
+    if (isInCart(itemId)) return;
+    try {
+      await supabase
+          .from('cart_items')
+          .insert({'user_id': uid, 'item_id': itemId});
+      await loadCart();
+    } catch (_) {
+      // Silently fail — item may already be in cart
+    }
+  }
+
+  Future<void> removeItem(String itemId) async {
+    final uid = supabase.auth.currentUser?.id;
+    if (uid == null) return;
+    try {
+      await supabase
+          .from('cart_items')
+          .delete()
+          .eq('user_id', uid)
+          .eq('item_id', itemId);
+      state = state.copyWith(
+        items: state.items.where((c) => c.itemId != itemId).toList(),
+      );
+    } catch (_) {
+      // ignore
+    }
   }
 
   bool isInCart(String itemId) {
@@ -72,13 +97,12 @@ class CartNotifier extends StateNotifier<CartState> {
 
   List<ClothingItem> getCartClothingItems() {
     return state.items
-        .map((c) => MockApi.getItemById(c.itemId))
-        .where((i) => i != null)
-        .cast<ClothingItem>()
+        .where((c) => c.item != null)
+        .map((c) => c.item!)
         .toList();
   }
 }
 
 final cartProvider = StateNotifierProvider<CartNotifier, CartState>((ref) {
-  return CartNotifier(ref);
+  return CartNotifier();
 });

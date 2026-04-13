@@ -5,16 +5,28 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../models/models.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/orders_provider.dart';
 import '../../providers/review_provider.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/empty_state.dart';
 
-class OrdersScreen extends ConsumerWidget {
+class OrdersScreen extends ConsumerStatefulWidget {
   const OrdersScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OrdersScreen> createState() => _OrdersScreenState();
+}
+
+class _OrdersScreenState extends ConsumerState<OrdersScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => ref.read(ordersProvider.notifier).refresh());
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final allOrders = ref.watch(ordersProvider);
     final ongoing = allOrders
         .where((o) =>
@@ -136,16 +148,19 @@ class _OngoingList extends StatelessWidget {
   }
 }
 
-class _OngoingOrderCard extends StatelessWidget {
+class _OngoingOrderCard extends ConsumerWidget {
   final OrderDetail orderDetail;
 
   const _OngoingOrderCard({required this.orderDetail});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final order = orderDetail.order;
     final item = orderDetail.item;
+    final currentUserId = ref.watch(authProvider).user?.id ?? '';
     final dateStr = DateFormat('MMM d, yyyy').format(order.createdAt);
+    final iConfirmed = order.hasConfirmed(currentUserId);
+    final otherConfirmed = order.otherPartyConfirmed(currentUserId);
 
     return Container(
       decoration: BoxDecoration(
@@ -157,28 +172,25 @@ class _OngoingOrderCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Item thumbnail
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    boxShadow: AppShadows.sm,
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    child: CachedNetworkImage(
-                      imageUrl: item.images.first,
-                      fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => Container(
-                        color: AppColors.surfaceSecondary,
-                        child: const Icon(Icons.image_outlined,
-                            size: 24, color: AppColors.textTertiary),
-                      ),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: CachedNetworkImage(
+                    imageUrl: item.images.isNotEmpty ? item.images.first : '',
+                    width: 72,
+                    height: 72,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, __, ___) => Container(
+                      width: 72,
+                      height: 72,
+                      color: AppColors.surfaceSecondary,
+                      child: const Icon(Icons.image_outlined,
+                          size: 24, color: AppColors.textTertiary),
                     ),
                   ),
                 ),
@@ -238,20 +250,68 @@ class _OngoingOrderCard extends StatelessWidget {
                 ),
               ],
             ),
+
+            // Locked coins notice + pickup confirmation state
+            const SizedBox(height: AppSpacing.md),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                color: iConfirmed
+                    ? AppColors.success.withValues(alpha: 0.06)
+                    : AppColors.primaryLight.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    iConfirmed
+                        ? Icons.check_circle_outline_rounded
+                        : Icons.lock_outline_rounded,
+                    size: 14,
+                    color: iConfirmed ? AppColors.success : AppColors.primary,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      iConfirmed
+                          ? otherConfirmed
+                              ? 'Both confirmed — finalizing...'
+                              : 'You confirmed pickup. Waiting for the other party.'
+                          : '${order.priceInCoins} SC locked · Confirm pickup to complete',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: iConfirmed
+                            ? AppColors.success
+                            : AppColors.primary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  // Confirmation badges
+                  _MiniConfirmDot(confirmed: order.buyerConfirmedPickup, label: 'B'),
+                  const SizedBox(width: 4),
+                  _MiniConfirmDot(confirmed: order.sellerConfirmedPickup, label: 'S'),
+                ],
+              ),
+            ),
+
             const SizedBox(height: AppSpacing.md),
 
-            // Track Order button
+            // Open Chat button (primary action)
             SizedBox(
               width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  context.push('/orders/${order.id}/track');
-                },
-                icon: const Icon(Icons.route_outlined, size: 18),
-                label: const Text('Track Order'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(color: AppColors.primary, width: 1.5),
+              child: ElevatedButton.icon(
+                onPressed: () => context.push('/chat/${order.id}'),
+                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+                label: const Text('Open Chat'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.white,
+                  elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(AppRadius.md),
                   ),
@@ -264,6 +324,37 @@ class _OngoingOrderCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniConfirmDot extends StatelessWidget {
+  final bool confirmed;
+  final String label;
+
+  const _MiniConfirmDot({required this.confirmed, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 20,
+      height: 20,
+      decoration: BoxDecoration(
+        color: confirmed
+            ? AppColors.success
+            : AppColors.surfaceContainerHigh,
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            color: confirmed ? AppColors.white : AppColors.textTertiary,
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
     );
@@ -496,6 +587,11 @@ class _StatusBadge extends StatelessWidget {
           AppColors.success.withValues(alpha: 0.15),
           AppColors.success,
           'Completed',
+        ),
+      OrderStatus.readyForPickup => (
+          const Color(0xFFE8F5E9),
+          const Color(0xFF2E7D32),
+          'Ready',
         ),
       OrderStatus.cancelled => (
           AppColors.error.withValues(alpha: 0.15),

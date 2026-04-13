@@ -7,7 +7,6 @@ import '../../models/models.dart';
 import '../../providers/address_provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/wallet_provider.dart';
-import '../../services/mock_api.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/glass_button.dart';
 import '../profile/buy_coins_sheet.dart';
@@ -51,10 +50,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ),
         centerTitle: true,
         surfaceTintColor: Colors.transparent,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: AppColors.border),
-        ),
+        bottom: null,
       ),
       body: cartItems.isEmpty
           ? const Center(child: Text('Your cart is empty'))
@@ -139,30 +135,64 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Future<void> _handlePayment(List<ClothingItem> cartItems) async {
     setState(() => _isProcessing = true);
 
-    Order? lastOrder;
-    for (final item in cartItems) {
-      final order = await ref.read(walletProvider.notifier).purchaseItem(item.id);
-      if (order != null) lastOrder = order;
-    }
+    try {
+      Order? lastOrder;
+      for (final item in cartItems) {
+        final order = await ref.read(walletProvider.notifier).lockCoinsForOrder(item.id);
+        if (order != null) lastOrder = order;
+      }
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() => _isProcessing = false);
+      setState(() => _isProcessing = false);
 
-    if (lastOrder != null) {
-      context.go('/checkout-success', extra: {
-        'items': cartItems,
-        'totalCoins': cartItems.fold<int>(0, (sum, i) => sum + i.priceInCoins),
-        'orderId': lastOrder.id,
-      });
-    } else {
+      if (lastOrder != null) {
+        context.go('/checkout-success', extra: {
+          'items': cartItems,
+          'totalCoins': cartItems.fold<int>(0, (sum, i) => sum + i.priceInCoins),
+          'orderId': lastOrder.id,
+          'sellerId': cartItems.first.ownerId,
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Purchase failed. Please check your balance and try again.',
+              style: GoogleFonts.plusJakartaSans(color: AppColors.white),
+            ),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+
+      String message = 'Something went wrong. Please try again.';
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('insufficient') || msg.contains('balance')) {
+        message = 'Not enough Style Coins. Top up and try again.';
+      } else if (msg.contains('sold') || msg.contains('unavailable') || msg.contains('active')) {
+        message = 'This item is no longer available.';
+      } else if (msg.contains('network') || msg.contains('socket') || msg.contains('connection')) {
+        message = 'Connection error. Check your internet and try again.';
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Purchase failed. Please check your balance.',
-            style: GoogleFonts.plusJakartaSans(),
+            message,
+            style: GoogleFonts.plusJakartaSans(color: AppColors.white),
           ),
           backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
         ),
       );
     }
@@ -207,9 +237,8 @@ class _AddressCard extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: AppColors.surfaceContainerLow,
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: AppColors.border, width: 1),
         ),
         child: Column(
           children: [
@@ -238,9 +267,8 @@ class _AddressCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border, width: 1),
         boxShadow: AppShadows.sm,
       ),
       child: Row(
@@ -249,7 +277,7 @@ class _AddressCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: AppColors.primaryLight,
+              color: AppColors.primaryFixed,
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
             child: Icon(
@@ -313,9 +341,8 @@ class _OrderItemRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.borderLight, width: 1),
       ),
       child: Row(
         children: [
@@ -399,12 +426,10 @@ class _PaymentCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: hasEnough
+            ? AppColors.secondary.withValues(alpha: 0.06)
+            : AppColors.warning.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(
-          color: hasEnough ? AppColors.success.withValues(alpha: 0.3) : AppColors.warning.withValues(alpha: 0.3),
-          width: 1,
-        ),
         boxShadow: AppShadows.sm,
       ),
       child: Column(
@@ -518,9 +543,8 @@ class _PriceBreakdown extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.border, width: 1),
       ),
       child: Column(
         children: [
@@ -532,7 +556,7 @@ class _PriceBreakdown extends StatelessWidget {
             valueColor: AppColors.success,
           ),
           const SizedBox(height: AppSpacing.md),
-          Container(height: 1, color: AppColors.border),
+          Container(height: 1, color: AppColors.surfaceContainerHighest),
           const SizedBox(height: AppSpacing.md),
           _PriceRow(
             label: 'Total',
@@ -607,19 +631,38 @@ class _CheckoutBottomBar extends StatelessWidget {
         bottom: MediaQuery.of(context).padding.bottom + AppSpacing.lg,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: const Border(
-          top: BorderSide(color: AppColors.border, width: 1),
-        ),
+        color: AppColors.surfaceContainerLowest,
         boxShadow: AppShadows.lg,
       ),
-      child: SizedBox(
-        width: double.infinity,
-        child: GlassButton(
-          label: 'Pay $totalCoins SC',
-          icon: Icons.monetization_on_outlined,
-          isLoading: isLoading,
-          onPressed: isEnabled ? onPay : null,
+      child: GestureDetector(
+        onTap: isEnabled ? onPay : null,
+        child: Container(
+          width: double.infinity,
+          height: 52,
+          decoration: BoxDecoration(
+            gradient: isEnabled ? AppGradients.primary : null,
+            color: isEnabled ? null : AppColors.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(AppRadius.full),
+            boxShadow: isEnabled ? AppShadows.md : null,
+          ),
+          alignment: Alignment.center,
+          child: isLoading
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.onPrimary,
+                  ),
+                )
+              : Text(
+                  'Pay with $totalCoins SC',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: isEnabled ? AppColors.onPrimary : AppColors.outline,
+                    fontSize: AppTypography.fontMd,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
         ),
       ),
     );

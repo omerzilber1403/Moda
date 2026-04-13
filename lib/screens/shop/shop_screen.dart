@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,7 +8,6 @@ import '../../models/models.dart';
 import '../../providers/likes_provider.dart';
 import '../../providers/shop_provider.dart';
 import '../../providers/wallet_provider.dart';
-import '../../services/mock_api.dart';
 import '../../theme/tokens.dart';
 import '../profile/buy_coins_sheet.dart';
 import 'filter_sheet.dart';
@@ -39,14 +39,14 @@ class ShopScreen extends ConsumerWidget {
                 Text(
                   'Moda',
                   style: GoogleFonts.plusJakartaSans(
-                    color: AppColors.textPrimary,
+                    color: AppColors.primary,
                     fontSize: AppTypography.font2xl,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: AppTypography.letterSpacingTitle,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: AppTypography.letterSpacingHeadline,
                   ),
                 ),
                 const Spacer(),
-                // Coin balance badge
+                // Coin balance badge — tonal bg only, no border
                 GestureDetector(
                   onTap: () => showBuyCoinsSheet(context, ref),
                   child: Container(
@@ -55,12 +55,8 @@ class ShopScreen extends ConsumerWidget {
                       vertical: AppSpacing.xs,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
+                      color: AppColors.primaryFixed,
                       borderRadius: BorderRadius.circular(AppRadius.full),
-                      border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.2),
-                        width: 1,
-                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -99,40 +95,42 @@ class ShopScreen extends ConsumerWidget {
             ),
             child: Row(
               children: [
-                // Search bar
+                // Glassmorphic search bar
                 Expanded(
-                  child: Container(
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(AppRadius.full),
-                      border: Border.all(
-                        color: AppColors.border,
-                        width: 1,
-                      ),
-                      boxShadow: AppShadows.sm,
-                    ),
-                    child: TextField(
-                      onChanged: (value) =>
-                          ref.read(shopProvider.notifier).setSearchQuery(value),
-                      style: GoogleFonts.plusJakartaSans(
-                        color: AppColors.textPrimary,
-                        fontSize: AppTypography.fontSm,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'Search by brand, title...',
-                        hintStyle: GoogleFonts.plusJakartaSans(
-                          color: AppColors.textTertiary,
-                          fontSize: AppTypography.fontSm,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.full),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                      child: Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: AppColors.glassBackgroundLight,
+                          borderRadius: BorderRadius.circular(AppRadius.full),
+                          boxShadow: AppShadows.sm,
                         ),
-                        prefixIcon: const Icon(
-                          Icons.search_rounded,
-                          color: AppColors.textTertiary,
-                          size: 20,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: AppSpacing.md,
+                        child: TextField(
+                          onChanged: (v) =>
+                              ref.read(shopProvider.notifier).setSearchQuery(v),
+                          style: GoogleFonts.plusJakartaSans(
+                            color: AppColors.textPrimary,
+                            fontSize: AppTypography.fontSm,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Search by brand, title...',
+                            hintStyle: GoogleFonts.plusJakartaSans(
+                              color: AppColors.textTertiary,
+                              fontSize: AppTypography.fontSm,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.search_rounded,
+                              color: AppColors.textTertiary,
+                              size: 20,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: AppSpacing.md,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -150,14 +148,8 @@ class ShopScreen extends ConsumerWidget {
                     decoration: BoxDecoration(
                       color: shopState.filters.activeFilterCount > 0
                           ? AppColors.primary
-                          : AppColors.surface,
+                          : AppColors.surfaceContainerHigh,
                       borderRadius: BorderRadius.circular(AppRadius.lg),
-                      border: Border.all(
-                        color: shopState.filters.activeFilterCount > 0
-                            ? AppColors.primary
-                            : AppColors.border,
-                        width: 1,
-                      ),
                       boxShadow: AppShadows.sm,
                     ),
                     child: Stack(
@@ -219,7 +211,7 @@ class ShopScreen extends ConsumerWidget {
                       ref.read(shopProvider.notifier).setCategory(null),
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                ...MockApi.categories.map((cat) => Padding(
+                ...shopState.categories.map((cat) => Padding(
                       padding: const EdgeInsets.only(right: AppSpacing.sm),
                       child: _CategoryChip(
                         label: '${cat.icon ?? ''} ${cat.name}',
@@ -298,7 +290,7 @@ class ShopScreen extends ConsumerWidget {
                           crossAxisCount: 2,
                           mainAxisSpacing: AppLayout.matchGridGap,
                           crossAxisSpacing: AppLayout.matchGridGap,
-                          childAspectRatio: 0.62,
+                          childAspectRatio: 0.68,
                         ),
                         itemCount: shopState.items.length,
                         itemBuilder: (context, index) {
@@ -348,9 +340,9 @@ class _ShopGridCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: AppColors.surfaceContainerLowest,
           borderRadius: BorderRadius.circular(AppRadius.xl),
-          boxShadow: AppShadows.sm,
+          boxShadow: AppShadows.lg,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -362,7 +354,7 @@ class _ShopGridCard extends StatelessWidget {
                 children: [
                   ClipRRect(
                     borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(AppRadius.xl),
+                      top: Radius.circular(AppRadius.lg),
                     ),
                     child: CachedNetworkImage(
                       imageUrl: item.images.first,
@@ -421,14 +413,15 @@ class _ShopGridCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Brand
+                  // Brand — uppercase, tracking
                   if (item.brand != null)
                     Text(
-                      item.brand!,
+                      item.brand!.toUpperCase(),
                       style: GoogleFonts.plusJakartaSans(
-                        color: AppColors.textSecondary,
-                        fontSize: AppTypography.fontXs,
-                        fontWeight: FontWeight.w500,
+                        color: AppColors.onSurfaceVariant,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.6,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -438,9 +431,9 @@ class _ShopGridCard extends StatelessWidget {
                   Text(
                     item.title,
                     style: GoogleFonts.plusJakartaSans(
-                      color: AppColors.textPrimary,
+                      color: AppColors.onSurface,
                       fontSize: AppTypography.fontSm,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -451,33 +444,40 @@ class _ShopGridCard extends StatelessWidget {
                   // Price + condition row
                   Row(
                     children: [
-                      // Price
+                      // Price pill
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: AppSpacing.sm,
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryLight,
-                          borderRadius:
-                              BorderRadius.circular(AppRadius.sm),
+                          color: AppColors.primaryFixed,
+                          borderRadius: BorderRadius.circular(AppRadius.full),
                         ),
                         child: Text(
                           '${item.priceInCoins} SC',
                           style: GoogleFonts.plusJakartaSans(
                             color: AppColors.primary,
-                            fontSize: AppTypography.fontXs,
+                            fontSize: 10,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
                       const SizedBox(width: AppSpacing.xs),
-                      // Condition
-                      Expanded(
+                      // Condition pill
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceContainerHigh,
+                          borderRadius: BorderRadius.circular(AppRadius.full),
+                        ),
                         child: Text(
                           _conditionLabel(item.condition),
                           style: GoogleFonts.plusJakartaSans(
-                            color: AppColors.textTertiary,
+                            color: AppColors.onSurfaceVariant,
                             fontSize: 10,
                           ),
                           maxLines: 1,
@@ -528,20 +528,15 @@ class _CategoryChip extends StatelessWidget {
           vertical: AppSpacing.sm,
         ),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : AppColors.surface,
+          color: isSelected ? AppColors.primaryFixed : AppColors.surfaceContainer,
           borderRadius: BorderRadius.circular(AppRadius.full),
-          border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.border,
-            width: 1,
-          ),
-          boxShadow: isSelected ? null : AppShadows.sm,
         ),
         child: Text(
           label,
           style: GoogleFonts.plusJakartaSans(
-            color: isSelected ? AppColors.white : AppColors.textSecondary,
+            color: isSelected ? AppColors.primary : AppColors.onSurfaceVariant,
             fontSize: AppTypography.fontSm,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
           ),
         ),
       ),
@@ -609,8 +604,9 @@ class _EmptyState extends StatelessWidget {
                     vertical: AppSpacing.md,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.primary,
+                    gradient: AppGradients.primary,
                     borderRadius: BorderRadius.circular(AppRadius.full),
+                    boxShadow: AppShadows.md,
                   ),
                   child: Text(
                     'Clear Filters',

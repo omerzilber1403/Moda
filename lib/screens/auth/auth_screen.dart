@@ -1,378 +1,447 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../models/models.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../../providers/auth_provider.dart';
-import '../../services/mock_api.dart';
 import '../../theme/tokens.dart';
 
-class AuthScreen extends ConsumerWidget {
+class AuthScreen extends ConsumerStatefulWidget {
   const AuthScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AuthScreen> createState() => _AuthScreenState();
+}
+
+class _AuthScreenState extends ConsumerState<AuthScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _nameController = TextEditingController();
+  bool _isLogin = true;
+  String? _error;
+  bool _emailConfirmationSent = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() {
+      _error = null;
+      _emailConfirmationSent = false;
+    });
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _error = 'Please fill in all fields.');
+      return;
+    }
+    if (!email.contains('@')) {
+      setState(() => _error = 'Please enter a valid email address.');
+      return;
+    }
+    try {
+      if (_isLogin) {
+        await ref.read(authProvider.notifier).login(email, password);
+      } else {
+        final name = _nameController.text.trim();
+        if (name.isEmpty) {
+          setState(() => _error = 'Please enter your name.');
+          return;
+        }
+        if (password.length < 8) {
+          setState(() => _error = 'Password must be at least 8 characters.');
+          return;
+        }
+        final signedInImmediately =
+            await ref.read(authProvider.notifier).register(email, password, name);
+        if (!signedInImmediately && mounted) {
+          setState(() => _emailConfirmationSent = true);
+        }
+      }
+    } on AuthException catch (e) {
+      if (mounted) {
+        setState(() => _error = _friendlyAuthError(e, _isLogin));
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = 'Something went wrong. Please try again.');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: AppSpacing.xxxl),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppLayout.screenPaddingH,
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: AppSpacing.xxxl),
 
-            // Logo section
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppLayout.screenPaddingH,
-              ),
-              child: Column(
-                children: [
-                  // App icon — primary circle
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.3),
-                          blurRadius: 32,
-                          spreadRadius: 4,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
+              // Logo section
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.3),
+                      blurRadius: 32,
+                      spreadRadius: 4,
+                      offset: const Offset(0, 8),
                     ),
-                    child: const Icon(
-                      Icons.checkroom_rounded,
-                      color: AppColors.white,
-                      size: 38,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  Text(
-                    'Moda',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 42,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                      letterSpacing: -1.5,
-                      height: AppTypography.lineHeightTight,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    'Buy & sell with Style Coins',
-                    style: GoogleFonts.plusJakartaSans(
-                      color: AppColors.textSecondary,
-                      fontSize: AppTypography.fontMd,
-                      fontWeight: FontWeight.w400,
-                      height: AppTypography.lineHeightNormal,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  // Free coins badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.lg,
-                      vertical: AppSpacing.xs,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
-                      borderRadius: BorderRadius.circular(AppRadius.full),
-                      border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.2),
-                        width: 1,
-                      ),
-                    ),
-                    child: Text(
-                      '50 free Style Coins for new users!',
-                      style: GoogleFonts.plusJakartaSans(
-                        color: AppColors.primary,
-                        fontSize: AppTypography.fontSm,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    'Choose your account to continue',
-                    style: GoogleFonts.plusJakartaSans(
-                      color: AppColors.textTertiary,
-                      fontSize: AppTypography.fontSm,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: AppSpacing.xxl),
-
-            // User list
-            Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppLayout.screenPaddingH,
-                  vertical: AppSpacing.sm,
+                  ],
                 ),
-                itemCount: MockApi.users.length,
-                separatorBuilder: (_, __) =>
-                    const SizedBox(height: AppSpacing.md),
-                itemBuilder: (context, index) {
-                  final user = MockApi.users[index];
-                  return _UserPickerCard(
-                    user: user,
-                    isLoading: authState.isLoading,
-                    onTap: () =>
-                        ref.read(authProvider.notifier).loginAs(user),
-                  );
-                },
+                child: const Icon(
+                  Icons.checkroom_rounded,
+                  color: AppColors.white,
+                  size: 38,
+                ),
               ),
-            ),
+              const SizedBox(height: AppSpacing.xl),
+              Text(
+                'Moda',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 42,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                  letterSpacing: -1.5,
+                  height: AppTypography.lineHeightTight,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Buy & sell with Style Coins',
+                style: GoogleFonts.plusJakartaSans(
+                  color: AppColors.textSecondary,
+                  fontSize: AppTypography.fontMd,
+                  fontWeight: FontWeight.w400,
+                  height: AppTypography.lineHeightNormal,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              // Free coins badge
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                  vertical: AppSpacing.xs,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.2),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  '50 free Style Coins for new users!',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: AppColors.primary,
+                    fontSize: AppTypography.fontSm,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
 
-            // Dev mode badge
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.xl),
-              child: Row(
+              const SizedBox(height: AppSpacing.xxl),
+
+              // Toggle login/register
+              Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.xs,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(AppRadius.full),
-                      border: Border.all(
-                        color: AppColors.border,
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.code_rounded,
-                          size: 12,
-                          color: AppColors.textTertiary,
-                        ),
-                        const SizedBox(width: AppSpacing.xs),
-                        Text(
-                          'Dev Mode — Pick a test user',
-                          style: GoogleFonts.plusJakartaSans(
-                            color: AppColors.textTertiary,
-                            fontSize: AppTypography.fontXs,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ],
-                    ),
+                  _ToggleChip(
+                    label: 'Log In',
+                    isSelected: _isLogin,
+                    onTap: () => setState(() => _isLogin = true),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  _ToggleChip(
+                    label: 'Sign Up',
+                    isSelected: !_isLogin,
+                    onTap: () => setState(() => _isLogin = false),
                   ),
                 ],
               ),
-            ),
-          ],
+
+              const SizedBox(height: AppSpacing.xl),
+
+              // Name field (register only)
+              if (!_isLogin) ...[
+                _InputField(
+                  controller: _nameController,
+                  hint: 'Full Name',
+                  icon: Icons.person_outline_rounded,
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
+
+              // Email field
+              _InputField(
+                controller: _emailController,
+                hint: 'Email',
+                icon: Icons.email_outlined,
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: AppSpacing.md),
+
+              // Password field
+              _InputField(
+                controller: _passwordController,
+                hint: 'Password',
+                icon: Icons.lock_outline_rounded,
+                obscureText: true,
+              ),
+
+              if (_emailConfirmationSent) ...[
+                const SizedBox(height: AppSpacing.md),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  decoration: BoxDecoration(
+                    color: AppColors.secondary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.mark_email_read_outlined,
+                        color: AppColors.secondary,
+                        size: 32,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        'Check your email',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: AppTypography.fontLg,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        'We sent a confirmation link to ${_emailController.text.trim()}. '
+                        'Tap it to activate your account.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: AppTypography.fontSm,
+                          color: AppColors.onSurfaceVariant,
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      GestureDetector(
+                        onTap: () => setState(() {
+                          _isLogin = true;
+                          _emailConfirmationSent = false;
+                        }),
+                        child: Text(
+                          'Go to Login',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              if (_error != null && !_emailConfirmationSent) ...[
+                const SizedBox(height: AppSpacing.md),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline_rounded,
+                          color: AppColors.error, size: 16),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          style: GoogleFonts.plusJakartaSans(
+                            color: AppColors.error,
+                            fontSize: AppTypography.fontSm,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: AppSpacing.xl),
+
+              // Submit button
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: authState.isLoading ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                    ),
+                  ),
+                  child: authState.isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.white,
+                          ),
+                        )
+                      : Text(
+                          _isLogin ? 'Log In' : 'Create Account',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: AppTypography.fontMd,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                ),
+              ),
+
+              const SizedBox(height: AppSpacing.xxl),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _UserPickerCard extends StatefulWidget {
-  final User user;
-  final bool isLoading;
+String _friendlyAuthError(AuthException e, bool isLogin) {
+  final msg = e.message.toLowerCase();
+  if (msg.contains('invalid login credentials') ||
+      msg.contains('invalid_credentials')) {
+    return 'Incorrect email or password. Please try again.';
+  }
+  if (msg.contains('email not confirmed')) {
+    return 'Please confirm your email address first. Check your inbox.';
+  }
+  if (msg.contains('already registered') ||
+      msg.contains('already been registered')) {
+    return 'An account with this email already exists. Try logging in.';
+  }
+  if (msg.contains('too many requests') || msg.contains('rate limit')) {
+    return 'Too many attempts. Please wait a moment and try again.';
+  }
+  if (msg.contains('user not found')) {
+    return 'No account found with this email. Sign up to get started.';
+  }
+  if (msg.contains('password') && msg.contains('least')) {
+    return 'Password is too short. Please use at least 6 characters.';
+  }
+  return e.message;
+}
+
+class _ToggleChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
   final VoidCallback onTap;
 
-  const _UserPickerCard({
-    required this.user,
-    required this.isLoading,
+  const _ToggleChip({
+    required this.label,
+    required this.isSelected,
     required this.onTap,
   });
 
   @override
-  State<_UserPickerCard> createState() => _UserPickerCardState();
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xl,
+          vertical: AppSpacing.md,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.full),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.border,
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            color: isSelected ? AppColors.white : AppColors.textSecondary,
+            fontSize: AppTypography.fontSm,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _UserPickerCardState extends State<_UserPickerCard> {
-  bool _pressed = false;
+class _InputField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  final IconData icon;
+  final bool obscureText;
+  final TextInputType? keyboardType;
+
+  const _InputField({
+    required this.controller,
+    required this.hint,
+    required this.icon,
+    this.obscureText = false,
+    this.keyboardType,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        if (!widget.isLoading) widget.onTap();
-      },
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1.0,
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOut,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          decoration: BoxDecoration(
-            color: _pressed ? AppColors.primaryLight : AppColors.surface,
-            borderRadius: BorderRadius.circular(AppRadius.xl),
-            border: Border.all(
-              color: _pressed ? AppColors.primary.withValues(alpha: 0.4) : AppColors.border,
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.shadowColor.withValues(alpha: 0.06),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
+    return Container(
+      height: 52,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.border, width: 1),
+      ),
+      child: TextField(
+        controller: controller,
+        obscureText: obscureText,
+        keyboardType: keyboardType,
+        style: GoogleFonts.plusJakartaSans(
+          color: AppColors.textPrimary,
+          fontSize: AppTypography.fontMd,
+        ),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: GoogleFonts.plusJakartaSans(
+            color: AppColors.textTertiary,
+            fontSize: AppTypography.fontMd,
           ),
-          child: Row(
-            children: [
-              // Avatar
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppColors.border,
-                    width: 1,
-                  ),
-                ),
-                child: ClipOval(
-                  child: widget.user.avatarUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl: widget.user.avatarUrl!,
-                          width: 56,
-                          height: 56,
-                          fit: BoxFit.cover,
-                          errorWidget: (_, __, ___) => Container(
-                            color: AppColors.gray100,
-                            child: const Icon(Icons.person, size: 28, color: AppColors.gray400),
-                          ),
-                        )
-                      : Container(
-                          width: 56,
-                          height: 56,
-                          color: AppColors.gray100,
-                          child: const Icon(Icons.person, size: 28, color: AppColors.gray400),
-                        ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.lg),
-
-              // User info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.user.displayName,
-                      style: GoogleFonts.plusJakartaSans(
-                        color: AppColors.textPrimary,
-                        fontSize: AppTypography.fontMd,
-                        fontWeight: FontWeight.bold,
-                        height: AppTypography.lineHeightTight,
-                      ),
-                    ),
-                    if (widget.user.city != null) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.location_on_outlined,
-                            size: 12,
-                            color: AppColors.textTertiary,
-                          ),
-                          const SizedBox(width: 3),
-                          Flexible(
-                            child: Text(
-                              widget.user.city!,
-                              style: GoogleFonts.plusJakartaSans(
-                                color: AppColors.textSecondary,
-                                fontSize: AppTypography.fontSm,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.sm,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryLight,
-                              borderRadius: BorderRadius.circular(AppRadius.sm),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'SC',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    color: AppColors.primary.withValues(alpha: 0.7),
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(width: 3),
-                                Text(
-                                  '${widget.user.styleCoinBalance}',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    color: AppColors.primary,
-                                    fontSize: AppTypography.fontXs,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    if (widget.user.bio != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        widget.user.bio!,
-                        style: GoogleFonts.plusJakartaSans(
-                          color: AppColors.textTertiary,
-                          fontSize: AppTypography.fontSm,
-                          height: AppTypography.lineHeightNormal,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-              const SizedBox(width: AppSpacing.md),
-
-              // Chevron
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: _pressed ? AppColors.primary : AppColors.background,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: _pressed ? Colors.transparent : AppColors.border,
-                    width: 1,
-                  ),
-                ),
-                child: Icon(
-                  Icons.chevron_right_rounded,
-                  color: _pressed ? AppColors.white : AppColors.textSecondary,
-                  size: 20,
-                ),
-              ),
-            ],
+          prefixIcon: Icon(icon, color: AppColors.textTertiary, size: 20),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: AppSpacing.md,
           ),
         ),
       ),

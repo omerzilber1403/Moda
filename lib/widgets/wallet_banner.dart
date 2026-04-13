@@ -20,12 +20,9 @@ class WalletBanner extends StatelessWidget {
         vertical: AppSpacing.md,
       ),
       decoration: BoxDecoration(
-        color: AppColors.primaryLight,
+        color: AppColors.primaryFixed,
         borderRadius: BorderRadius.circular(AppRadius.xxl),
-        border: Border.all(
-          color: AppColors.primary.withValues(alpha: 0.15),
-          width: 1,
-        ),
+        boxShadow: AppShadows.sm,
       ),
       child: Row(
         children: [
@@ -87,17 +84,14 @@ class WalletBanner extends StatelessWidget {
                   vertical: AppSpacing.sm,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  gradient: AppGradients.primary,
                   borderRadius: BorderRadius.circular(AppRadius.full),
-                  border: Border.all(
-                    color: AppColors.primary.withValues(alpha: 0.3),
-                    width: 1,
-                  ),
+                  boxShadow: AppShadows.sm,
                 ),
                 child: Text(
                   'Buy Coins',
                   style: GoogleFonts.plusJakartaSans(
-                    color: AppColors.primary,
+                    color: AppColors.onPrimary,
                     fontSize: AppTypography.fontSm,
                     fontWeight: FontWeight.w600,
                   ),

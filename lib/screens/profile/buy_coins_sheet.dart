@@ -9,6 +9,7 @@ void showBuyCoinsSheet(BuildContext context, WidgetRef ref) {
   showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
+    isScrollControlled: true,
     builder: (context) => const _BuyCoinsContent(),
   );
 }
@@ -103,18 +104,52 @@ class _BuyCoinsContentState extends ConsumerState<_BuyCoinsContent> {
             label: 'Purchase for \u20AA$_selectedAmount',
             icon: Icons.shopping_cart_outlined,
             onPressed: () async {
-              await ref
-                  .read(walletProvider.notifier)
-                  .topUp(_selectedAmount);
-              if (context.mounted) {
-                Navigator.of(context).pop();
+              try {
+                final balanceBefore = ref.read(walletProvider).balance;
+                await ref
+                    .read(walletProvider.notifier)
+                    .topUp(_selectedAmount);
+                if (!context.mounted) return;
+                final balanceAfter = ref.read(walletProvider).balance;
+                if (balanceAfter > balanceBefore) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Added $_selectedAmount Style Coins!',
+                        style: GoogleFonts.plusJakartaSans(color: AppColors.white),
+                      ),
+                      backgroundColor: AppColors.success,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Top-up failed. Please try again.',
+                        style: GoogleFonts.plusJakartaSans(color: AppColors.white),
+                      ),
+                      backgroundColor: AppColors.error,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                    ),
+                  );
+                }
+              } catch (_) {
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      'Added $_selectedAmount Style Coins!',
+                      'Something went wrong. Please try again.',
                       style: GoogleFonts.plusJakartaSans(color: AppColors.white),
                     ),
-                    backgroundColor: AppColors.success,
+                    backgroundColor: AppColors.error,
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(AppRadius.md),

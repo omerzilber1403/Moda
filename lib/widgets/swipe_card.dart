@@ -7,7 +7,7 @@ import '../theme/tokens.dart';
 
 class SwipeCard extends StatefulWidget {
   final ClothingItem item;
-  final User owner;
+  final AppUserRef owner;
   final VoidCallback? onCenterTap;
 
   const SwipeCard({
@@ -158,62 +158,6 @@ class _SwipeCardState extends State<SwipeCard> {
                 ),
               ),
 
-            // Price badge — top right
-            Positioned(
-              top: _imageCount > 1
-                  ? AppSpacing.lg + AppSpacing.md
-                  : AppSpacing.lg,
-              right: AppSpacing.lg,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.full),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(
-                    sigmaX: AppGlass.blur,
-                    sigmaY: AppGlass.blur,
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.sm,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(AppRadius.full),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.35),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'SC',
-                          style: GoogleFonts.plusJakartaSans(
-                            color: AppColors.white.withValues(alpha: 0.7),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${item.priceInCoins}',
-                          style: GoogleFonts.plusJakartaSans(
-                            color: AppColors.white,
-                            fontSize: AppTypography.fontLg,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
             // Clothing type badge — top left
             Positioned(
               top: _imageCount > 1
@@ -233,12 +177,8 @@ class _SwipeCardState extends State<SwipeCard> {
                       vertical: AppSpacing.sm,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.glassBackground,
+                      color: AppColors.glassBackgroundLight,
                       borderRadius: BorderRadius.circular(AppRadius.full),
-                      border: Border.all(
-                        color: AppColors.glassBorderLight,
-                        width: 0.5,
-                      ),
                     ),
                     child: Text(
                       item.clothingType.icon,
@@ -249,105 +189,125 @@ class _SwipeCardState extends State<SwipeCard> {
               ),
             ),
 
-            // Bottom info overlay
+            // Bottom glassmorphic info panel
             Positioned(
               bottom: 0,
               left: 0,
               right: 0,
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Title
-                    Text(
-                      item.title,
-                      style: GoogleFonts.plusJakartaSans(
-                        color: AppColors.white,
-                        fontSize: AppTypography.fontXl,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: AppTypography.letterSpacingTitle,
-                        height: AppTypography.lineHeightTight,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(AppRadius.xxxl),
+                ),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.xl,
+                      AppSpacing.lg,
+                      AppSpacing.xl,
+                      AppSpacing.xl,
                     ),
-                    const SizedBox(height: AppSpacing.sm),
-
-                    // Info chips row
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.xs,
-                      children: [
-                        if (item.brand != null)
-                          _GlassChip(label: item.brand!),
-                        _GlassChip(label: item.displaySize),
-                        _GlassChip(label: item.condition),
-                        if (item.color != null)
-                          _GlassChip(label: item.color!),
-                      ],
+                    decoration: BoxDecoration(
+                      color: AppColors.glassBackground.withValues(alpha: 0.75),
                     ),
-                    const SizedBox(height: AppSpacing.md),
-
-                    // Owner row
-                    Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppColors.glassBorderLight,
-                              width: 1.5,
-                            ),
-                          ),
-                          child: ClipOval(
-                            child: owner.avatarUrl != null
-                                ? CachedNetworkImage(
-                                    imageUrl: owner.avatarUrl!,
-                                    width: 28,
-                                    height: 28,
-                                    fit: BoxFit.cover,
-                                    errorWidget: (_, __, ___) =>
-                                        _AvatarFallback(),
-                                  )
-                                : _AvatarFallback(),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Text(
-                          owner.displayName,
-                          style: GoogleFonts.plusJakartaSans(
-                            color: AppColors.white.withValues(alpha: 0.85),
-                            fontSize: AppTypography.fontSm,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        if (owner.city != null) ...[
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.xs),
-                            child: Text(
-                              '\u2022',
-                              style: TextStyle(
-                                color:
-                                    AppColors.white.withValues(alpha: 0.5),
-                                fontSize: AppTypography.fontXs,
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Left: title + brand + chips
+                            Flexible(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (item.brand != null)
+                                    Text(
+                                      item.brand!.toUpperCase(),
+                                      style: GoogleFonts.plusJakartaSans(
+                                        color: AppColors.onSurfaceVariant,
+                                        fontSize: AppTypography.fontXs,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    item.title,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      color: AppColors.onSurface,
+                                      fontSize: AppTypography.fontLg,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: AppTypography.letterSpacingTitle,
+                                      height: AppTypography.lineHeightTight,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: AppSpacing.sm),
+                                  Row(
+                                    children: [
+                                      _InfoPill(label: item.displaySize),
+                                      const SizedBox(width: AppSpacing.xs),
+                                      _InfoPill(label: item.condition),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
-                          Text(
-                            owner.city!,
-                            style: GoogleFonts.plusJakartaSans(
-                              color:
-                                  AppColors.white.withValues(alpha: 0.6),
-                              fontSize: AppTypography.fontXs,
+                            const SizedBox(width: AppSpacing.md),
+                            // Right: WANT button + price
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                // WANT gradient pill button
+                                GestureDetector(
+                                  onTap: widget.onCenterTap,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppSpacing.lg,
+                                      vertical: AppSpacing.sm,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      gradient: AppGradients.primary,
+                                      borderRadius: BorderRadius.circular(AppRadius.full),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppColors.primary.withValues(alpha: 0.35),
+                                          blurRadius: 12,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Text(
+                                      'WANT',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        color: AppColors.white,
+                                        fontSize: AppTypography.fontSm,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: AppSpacing.sm),
+                                // Price
+                                Text(
+                                  '${item.priceInCoins} SC',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: AppColors.primary,
+                                    fontSize: AppTypography.fontMd,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -421,41 +381,28 @@ class _ImageProgressBars extends StatelessWidget {
 // Helper widgets
 // ---------------------------------------------------------------------------
 
-class _GlassChip extends StatelessWidget {
+class _InfoPill extends StatelessWidget {
   final String label;
 
-  const _GlassChip({required this.label});
+  const _InfoPill({required this.label});
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppRadius.full),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(
-          sigmaX: AppGlass.blurLight,
-          sigmaY: AppGlass.blurLight,
-        ),
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: 3,
-          ),
-          decoration: BoxDecoration(
-            color: AppColors.glassBackground,
-            borderRadius: BorderRadius.circular(AppRadius.full),
-            border: Border.all(
-              color: AppColors.glassBorderLight,
-              width: 0.5,
-            ),
-          ),
-          child: Text(
-            label,
-            style: GoogleFonts.plusJakartaSans(
-              color: AppColors.white,
-              fontSize: AppTypography.fontXs,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 3,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(AppRadius.full),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.plusJakartaSans(
+          color: AppColors.onSurfaceVariant,
+          fontSize: AppTypography.fontXs,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );

@@ -134,6 +134,7 @@ class TrackOrderScreen extends ConsumerWidget {
     final int currentStepIndex = switch (order.status) {
       OrderStatus.pending => 0,
       OrderStatus.confirmed => 3,
+      OrderStatus.readyForPickup => 4,
       OrderStatus.completed => 5,
       OrderStatus.cancelled => -1,
     };

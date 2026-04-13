@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 import '../screens/auth/auth_screen.dart';
 import '../screens/auth/login_screen.dart';
+import '../screens/auth/profile_setup_screen.dart';
 import '../screens/auth/signup_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
 import '../screens/auth/verification_code_screen.dart';
@@ -12,15 +13,19 @@ import '../screens/shop/shop_screen.dart';
 import '../screens/explore/explore_screen.dart';
 import '../screens/chat/chat_list_screen.dart';
 import '../screens/profile/profile_screen.dart';
+import '../screens/profile/seller_profile_screen.dart';
 import '../screens/chat/chat_screen.dart';
+import '../screens/chat/chat_user_orders_screen.dart';
 import '../screens/upload/upload_screen.dart';
 import '../screens/item_detail/item_detail_screen.dart';
 import '../screens/cart/cart_screen.dart';
 import '../screens/checkout/checkout_screen.dart';
 import '../screens/checkout/checkout_success_screen.dart';
+import '../screens/checkout/confirm_order_screen.dart';
 import '../models/models.dart';
 import '../screens/orders/orders_screen.dart';
 import '../screens/orders/track_order_screen.dart';
+import '../screens/orders/review_screen.dart';
 import '../screens/account/account_screen.dart';
 import '../screens/account/my_details_screen.dart';
 import '../screens/account/notification_settings_screen.dart';
@@ -45,7 +50,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           loc == '/reset-password';
 
       if (!isAuth && !isPublic) return '/login';
-      if (isAuth && (loc == '/login' || loc == '/auth')) return '/shop';
+      if (isAuth && (loc == '/login' || loc == '/auth' || loc == '/signup')) {
+        // Redirect new users who haven't set their gender to profile setup
+        final needsSetup = auth.user?.gender == null;
+        return needsSetup ? '/profile-setup' : '/shop';
+      }
+      // If user is authenticated but hasn't completed setup, redirect to setup
+      // (unless they're already on the setup page)
+      if (isAuth && auth.user?.gender == null && loc != '/profile-setup' && !isPublic) {
+        return '/profile-setup';
+      }
       return null;
     },
     routes: [
@@ -77,6 +91,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/reset-password',
         builder: (context, state) => const ResetPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/profile-setup',
+        builder: (context, state) => const ProfileSetupScreen(),
       ),
 
       // ─── Main shell (bottom nav) ─────────────────────────
@@ -128,12 +146,27 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: '/seller/:userId',
+        builder: (context, state) => SellerProfileScreen(
+          userId: state.pathParameters['userId']!,
+        ),
+      ),
+      GoRoute(
         path: '/cart',
         builder: (context, state) => const CartScreen(),
       ),
       GoRoute(
         path: '/checkout',
         builder: (context, state) => const CheckoutScreen(),
+      ),
+      GoRoute(
+        path: '/confirm-order',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>;
+          return ConfirmOrderScreen(
+            item: extra['item'] as ClothingItem,
+          );
+        },
       ),
       GoRoute(
         path: '/checkout/success',
@@ -145,6 +178,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                 [],
             totalCoins: (extra['totalCoins'] as int?) ?? 0,
             orderId: (extra['orderId'] as String?) ?? '',
+            sellerId: extra['sellerId'] as String?,
           );
         },
       ),
@@ -161,6 +195,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => TrackOrderScreen(
               orderId: state.pathParameters['orderId']!,
             ),
+          ),
+          GoRoute(
+            path: ':orderId/review',
+            builder: (context, state) {
+              final extra = state.extra as OrderDetail;
+              return ReviewScreen(orderDetail: extra);
+            },
           ),
         ],
       ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../../providers/auth_provider.dart';
 import '../../theme/tokens.dart';
 
@@ -22,6 +23,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   bool _obscureConfirm = true;
   bool _agreedToTerms = false;
   String? _errorMessage;
+  bool _emailConfirmationSent = false;
 
   @override
   void dispose() {
@@ -33,30 +35,73 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   }
 
   Future<void> _onSignup() async {
-    setState(() => _errorMessage = null);
+    setState(() {
+      _errorMessage = null;
+      _emailConfirmationSent = false;
+    });
 
     if (!_formKey.currentState!.validate()) return;
 
     if (!_agreedToTerms) {
-      setState(
-          () => _errorMessage = 'Please agree to the Terms & Conditions');
+      const msg = 'Please agree to the Terms & Conditions';
+      setState(() => _errorMessage = msg);
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: const Text(msg),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+            margin: const EdgeInsets.symmetric(
+              horizontal: AppLayout.screenPaddingH,
+              vertical: AppSpacing.md,
+            ),
+          ),
+        );
       return;
     }
 
     try {
-      await ref.read(authProvider.notifier).register(
+      final signedInImmediately = await ref.read(authProvider.notifier).register(
             _emailController.text.trim(),
             _passwordController.text,
             _nameController.text.trim(),
           );
 
-      if (mounted) {
-        context.go('/shop');
+      if (!mounted) return;
+
+      if (!signedInImmediately) {
+        setState(() => _emailConfirmationSent = true);
       }
     } catch (e) {
-      if (mounted) {
-        setState(() => _errorMessage = 'Sign up failed. Please try again.');
+      if (!mounted) return;
+      debugPrint('[Moda Signup] Error: $e (${e.runtimeType})');
+      String message;
+      if (e is AuthException) {
+        message = _friendlySignupError(e);
+      } else {
+        message = 'Something went wrong. Please try again.';
       }
+      setState(() => _errorMessage = message);
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+            margin: const EdgeInsets.symmetric(
+              horizontal: AppLayout.screenPaddingH,
+              vertical: AppSpacing.md,
+            ),
+          ),
+        );
     }
   }
 
@@ -86,9 +131,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 'Create Account',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: AppTypography.font2xl,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                  letterSpacing: AppTypography.letterSpacingTitle,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.onSurface,
+                  letterSpacing: AppTypography.letterSpacingHeadline,
                   height: AppTypography.lineHeightTight,
                 ),
               ),
@@ -104,17 +149,85 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
               const SizedBox(height: AppSpacing.xl),
 
+              // Email confirmation success
+              if (_emailConfirmationSent) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  decoration: BoxDecoration(
+                    color: AppColors.secondary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: AppColors.secondary.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.mark_email_read_outlined,
+                          color: AppColors.secondary,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        'Check your email',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: AppTypography.fontLg,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        'We sent a confirmation link to ${_emailController.text.trim()}. '
+                        'Tap the link in the email to activate your account, then come back to log in.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: AppTypography.fontSm,
+                          color: AppColors.onSurfaceVariant,
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      GestureDetector(
+                        onTap: () => context.go('/login'),
+                        child: Container(
+                          width: double.infinity,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            gradient: AppGradients.primary,
+                            borderRadius: BorderRadius.circular(AppRadius.full),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            'Go to Login',
+                            style: GoogleFonts.plusJakartaSans(
+                              color: AppColors.onPrimary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: AppTypography.fontMd,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+              ],
+
               // Error banner
-              if (_errorMessage != null) ...[
+              if (_errorMessage != null && !_emailConfirmationSent) ...[
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
                     color: AppColors.error.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(AppRadius.md),
-                    border: Border.all(
-                      color: AppColors.error.withValues(alpha: 0.3),
-                    ),
                   ),
                   child: Row(
                     children: [
@@ -136,8 +249,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 const SizedBox(height: AppSpacing.lg),
               ],
 
-              // Form
-              Form(
+              // Form (hidden after confirmation sent)
+              if (!_emailConfirmationSent) Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -287,37 +400,40 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
                     const SizedBox(height: AppSpacing.xl),
 
-                    // Sign Up button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 54,
-                      child: ElevatedButton(
-                        onPressed: authState.isLoading ? null : _onSignup,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: AppColors.white,
-                          disabledBackgroundColor:
-                              AppColors.primary.withValues(alpha: 0.6),
-                          shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(AppRadius.lg),
-                          ),
-                          elevation: 0,
-                          textStyle: GoogleFonts.plusJakartaSans(
-                            fontSize: AppTypography.fontMd,
-                            fontWeight: FontWeight.w600,
-                          ),
+                    // Sign Up button — gradient pill
+                    GestureDetector(
+                      onTap: authState.isLoading ? null : _onSignup,
+                      child: Container(
+                        width: double.infinity,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          gradient: authState.isLoading
+                              ? null
+                              : AppGradients.primary,
+                          color: authState.isLoading
+                              ? AppColors.surfaceContainerHigh
+                              : null,
+                          borderRadius: BorderRadius.circular(AppRadius.full),
+                          boxShadow: authState.isLoading ? null : AppShadows.md,
                         ),
+                        alignment: Alignment.center,
                         child: authState.isLoading
                             ? const SizedBox(
                                 width: 22,
                                 height: 22,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: AppColors.white,
+                                  color: AppColors.onPrimary,
                                 ),
                               )
-                            : const Text('Sign Up'),
+                            : Text(
+                                'Create Account',
+                                style: GoogleFonts.plusJakartaSans(
+                                  color: AppColors.onPrimary,
+                                  fontSize: AppTypography.fontMd,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                       ),
                     ),
 
@@ -327,20 +443,20 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     Row(
                       children: [
                         const Expanded(
-                            child: Divider(color: AppColors.border)),
+                            child: Divider(color: AppColors.surfaceContainerHighest)),
                         Padding(
                           padding: const EdgeInsets.symmetric(
                               horizontal: AppSpacing.lg),
                           child: Text(
                             'Or sign up with',
                             style: GoogleFonts.plusJakartaSans(
-                              color: AppColors.textTertiary,
+                              color: AppColors.outline,
                               fontSize: AppTypography.fontSm,
                             ),
                           ),
                         ),
                         const Expanded(
-                            child: Divider(color: AppColors.border)),
+                            child: Divider(color: AppColors.surfaceContainerHighest)),
                       ],
                     ),
 
@@ -412,6 +528,28 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   }
 }
 
+String _friendlySignupError(AuthException e) {
+  final msg = e.message.toLowerCase();
+  if (msg.contains('already registered') ||
+      msg.contains('already been registered') ||
+      msg.contains('user already registered')) {
+    return 'An account with this email already exists. Try logging in instead.';
+  }
+  if (msg.contains('password') && msg.contains('least')) {
+    return 'Password is too short. Please use at least 6 characters.';
+  }
+  if (msg.contains('valid email') || msg.contains('invalid') && msg.contains('email')) {
+    return 'Please enter a valid email address.';
+  }
+  if (msg.contains('too many requests') || msg.contains('rate limit')) {
+    return 'Too many attempts. Please wait a moment and try again.';
+  }
+  if (msg.contains('signups not allowed') || msg.contains('signup is disabled')) {
+    return 'Sign ups are temporarily disabled. Please try again later.';
+  }
+  return e.message;
+}
+
 // --- Reusable widgets for this screen ---
 
 class _BackButton extends StatelessWidget {
@@ -427,9 +565,8 @@ class _BackButton extends StatelessWidget {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: AppColors.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border.all(color: AppColors.border),
         ),
         child: const Icon(
           Icons.arrow_back_rounded,
@@ -490,16 +627,17 @@ class _AuthInputFieldState extends State<_AuthInputField> {
         AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(
-              color: showError
-                  ? AppColors.error
-                  : _isFocused
-                      ? AppColors.primary
-                      : AppColors.border,
-              width: (_isFocused || showError) ? 1.5 : 1,
-            ),
+            color: AppColors.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: (_isFocused || showError)
+                ? Border.all(
+                    color: showError ? AppColors.error : AppColors.primary,
+                    width: 1.5,
+                  )
+                : Border.all(
+                    color: AppColors.outlineVariant.withValues(alpha: 0.1),
+                    width: 1,
+                  ),
             boxShadow: _isFocused
                 ? [
                     BoxShadow(
@@ -588,10 +726,11 @@ class _SocialButton extends StatelessWidget {
         icon: Icon(icon, size: 22),
         label: Text(label),
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.textPrimary,
-          side: const BorderSide(color: AppColors.border),
+          foregroundColor: AppColors.onSurface,
+          backgroundColor: AppColors.surfaceContainerHigh,
+          side: BorderSide.none,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.lg),
+            borderRadius: BorderRadius.circular(AppRadius.md),
           ),
           textStyle: GoogleFonts.plusJakartaSans(
             fontSize: AppTypography.fontSm,

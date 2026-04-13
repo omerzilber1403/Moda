@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../../providers/auth_provider.dart';
 import '../../theme/tokens.dart';
 
@@ -28,7 +29,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _onLogin() async {
-    setState(() => _errorMessage = null);
+    setState(() {
+      _errorMessage = null;
+      _loginSuccess = false;
+    });
 
     if (!_formKey.currentState!.validate()) return;
 
@@ -41,15 +45,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) return;
 
       setState(() => _loginSuccess = true);
-      await Future.delayed(const Duration(milliseconds: 600));
-
-      if (mounted) {
-        context.go('/shop');
-      }
+      // Router redirect handles navigation to /shop automatically
+      // once authProvider.isAuthenticated becomes true.
     } catch (e) {
-      if (mounted) {
-        setState(() => _errorMessage = 'Login failed. Please try again.');
+      if (!mounted) return;
+      debugPrint('[Moda Login] Error: $e (${e.runtimeType})');
+      String message;
+      if (e is AuthException) {
+        message = _friendlyAuthError(e);
+      } else {
+        message = 'Something went wrong. Please try again.';
       }
+      setState(() => _errorMessage = message);
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+            margin: const EdgeInsets.symmetric(
+              horizontal: AppLayout.screenPaddingH,
+              vertical: AppSpacing.md,
+            ),
+          ),
+        );
     }
   }
 
@@ -79,7 +102,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 'Welcome Back',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: AppTypography.font2xl,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w900,
                   color: AppColors.onSurface,
                   letterSpacing: AppTypography.letterSpacingHeadline,
                   height: AppTypography.lineHeightTight,
@@ -213,7 +236,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           child: Text(
                             'Forgot Password?',
                             style: GoogleFonts.plusJakartaSans(
-                              color: AppColors.primary,
+                              color: AppColors.tertiary,
                               fontSize: AppTypography.fontXs,
                               fontWeight: FontWeight.w600,
                             ),
@@ -236,7 +259,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             color: authState.isLoading
                                 ? AppColors.surfaceContainerHigh
                                 : null,
-                            borderRadius: BorderRadius.circular(AppRadius.md),
+                            borderRadius: BorderRadius.circular(AppRadius.full),
                             boxShadow: authState.isLoading
                                 ? null
                                 : AppShadows.md,
@@ -328,6 +351,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
     );
   }
+}
+
+String _friendlyAuthError(AuthException e) {
+  final msg = e.message.toLowerCase();
+  if (msg.contains('invalid login credentials') ||
+      msg.contains('invalid_credentials')) {
+    return 'Incorrect email or password. Please try again.';
+  }
+  if (msg.contains('email not confirmed')) {
+    return 'Please confirm your email address before logging in. Check your inbox.';
+  }
+  if (msg.contains('too many requests') || msg.contains('rate limit')) {
+    return 'Too many attempts. Please wait a moment and try again.';
+  }
+  if (msg.contains('user not found')) {
+    return 'No account found with this email. Sign up to get started.';
+  }
+  if (msg.contains('refresh_token') || msg.contains('already used')) {
+    return 'Your session expired. Please try signing in again.';
+  }
+  // Fallback: show the actual Supabase message
+  return e.message;
 }
 
 // --- Shared widgets used across auth screens ---

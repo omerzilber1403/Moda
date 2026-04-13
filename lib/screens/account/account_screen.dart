@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/wallet_provider.dart';
 import '../../theme/tokens.dart';
@@ -19,6 +20,20 @@ class AccountScreen extends ConsumerWidget {
 
     if (user == null) return const SizedBox();
 
+    void showComingSoon(String feature) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          '$feature coming soon',
+          style: GoogleFonts.plusJakartaSans(color: AppColors.white),
+        ),
+        backgroundColor: AppColors.inverseSurface,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
+      ));
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -27,36 +42,49 @@ class AccountScreen extends ConsumerWidget {
             children: [
               const SizedBox(height: AppSpacing.xl),
 
-              // Avatar
-              Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.border, width: 1),
-                ),
-                child: ClipOval(
-                  child: user.avatarUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl: user.avatarUrl!,
+              // Avatar — no border ring per no-line rule
+              ClipOval(
+                child: user.avatarUrl != null
+                    ? CachedNetworkImage(
+                        imageUrl: user.avatarUrl!,
+                        width: 96,
+                        height: 96,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, __, ___) => Container(
                           width: 96,
                           height: 96,
-                          fit: BoxFit.cover,
-                          errorWidget: (_, __, ___) => Container(
-                            width: 96,
-                            height: 96,
-                            color: AppColors.gray100,
-                            child: const Icon(Icons.person,
-                                size: 48, color: AppColors.gray400),
+                          color: AppColors.surfaceContainerHigh,
+                          child: Center(
+                            child: Text(
+                              user.displayName.isNotEmpty
+                                  ? user.displayName[0].toUpperCase()
+                                  : '?',
+                              style: GoogleFonts.plusJakartaSans(
+                                color: AppColors.onSurfaceVariant,
+                                fontSize: 36,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
-                        )
-                      : Container(
-                          width: 96,
-                          height: 96,
-                          color: AppColors.gray100,
-                          child: const Icon(Icons.person,
-                              size: 48, color: AppColors.gray400),
                         ),
-                ),
+                      )
+                    : Container(
+                        width: 96,
+                        height: 96,
+                        color: AppColors.surfaceContainerHigh,
+                        child: Center(
+                          child: Text(
+                            user.displayName.isNotEmpty
+                                ? user.displayName[0].toUpperCase()
+                                : '?',
+                            style: GoogleFonts.plusJakartaSans(
+                              color: AppColors.onSurfaceVariant,
+                              fontSize: 36,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
               ),
 
               const SizedBox(height: AppSpacing.lg),
@@ -80,6 +108,34 @@ class AccountScreen extends ConsumerWidget {
                 style: GoogleFonts.plusJakartaSans(
                   color: AppColors.textSecondary,
                   fontSize: AppTypography.fontSm,
+                ),
+              ),
+
+              if (user.city != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.location_on_outlined,
+                        size: 13, color: AppColors.textTertiary),
+                    const SizedBox(width: 3),
+                    Text(
+                      user.city!,
+                      style: GoogleFonts.plusJakartaSans(
+                        color: AppColors.textTertiary,
+                        fontSize: AppTypography.fontXs,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Member since ${DateFormat('MMMM yyyy').format(user.createdAt)}',
+                style: GoogleFonts.plusJakartaSans(
+                  color: AppColors.textTertiary,
+                  fontSize: AppTypography.fontXs,
                 ),
               ),
 
@@ -181,12 +237,12 @@ class AccountScreen extends ConsumerWidget {
                   _MenuItem(
                     icon: Icons.location_on_outlined,
                     title: 'Delivery Address',
-                    onTap: () => context.push('/addresses'),
+                    onTap: () => context.push('/address'),
                   ),
                   _MenuItem(
                     icon: Icons.credit_card_outlined,
                     title: 'Payment Methods',
-                    onTap: () => context.push('/account/payment'),
+                    onTap: () => showComingSoon('Payment Methods'),
                   ),
                   _MenuItem(
                     icon: Icons.notifications_outlined,
@@ -214,17 +270,17 @@ class AccountScreen extends ConsumerWidget {
                   _MenuItem(
                     icon: Icons.help_outline_rounded,
                     title: 'FAQs',
-                    onTap: () => context.push('/account/faq'),
+                    onTap: () => showComingSoon('FAQs'),
                   ),
                   _MenuItem(
                     icon: Icons.headphones_outlined,
                     title: 'Help Center',
-                    onTap: () => context.push('/account/help'),
+                    onTap: () => showComingSoon('Help Center'),
                   ),
                   _MenuItem(
                     icon: Icons.chat_bubble_outline_rounded,
                     title: 'Customer Service',
-                    onTap: () => context.push('/account/service'),
+                    onTap: () => showComingSoon('Customer Service'),
                   ),
                 ],
               ),

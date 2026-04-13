@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/clothing_item.dart';
 import '../../providers/shop_provider.dart';
-import '../../services/mock_api.dart';
 import '../../theme/tokens.dart';
 
 /// Airbnb-style filter bottom sheet for the Shop marketplace.
@@ -12,16 +11,34 @@ import '../../theme/tokens.dart';
 /// Displays filter sections for category, size, price range, and condition.
 /// Reads initial values from the current [ShopFilterState] and applies
 /// all selections at once when the user taps "Apply Filters".
+const List<String> genderOptions = ['men', 'women', 'unisex'];
+
+String genderLabel(String value) {
+  switch (value) {
+    case 'men':
+      return 'Men';
+    case 'women':
+      return 'Women';
+    case 'unisex':
+      return 'Unisex';
+    default:
+      return value;
+  }
+}
+
 class FilterSheet extends StatefulWidget {
   final int? initialCategory;
   final String? initialSize;
   final String? initialCondition;
+  final String? initialGender;
   final int initialPriceMin;
   final int initialPriceMax;
+  final List<Category> categories;
   final void Function(
     int? category,
     String? size,
     String? condition,
+    String? gender,
     int priceMin,
     int priceMax,
   ) onApply;
@@ -31,8 +48,10 @@ class FilterSheet extends StatefulWidget {
     this.initialCategory,
     this.initialSize,
     this.initialCondition,
+    this.initialGender,
     this.initialPriceMin = 0,
-    this.initialPriceMax = 100,
+    this.initialPriceMax = 500,
+    this.categories = const [],
     required this.onApply,
   });
 
@@ -44,6 +63,7 @@ class _FilterSheetState extends State<FilterSheet> {
   late int? _selectedCategory;
   late String? _selectedSize;
   late String? _selectedCondition;
+  late String? _selectedGender;
   late RangeValues _priceRange;
 
   @override
@@ -52,6 +72,7 @@ class _FilterSheetState extends State<FilterSheet> {
     _selectedCategory = widget.initialCategory;
     _selectedSize = widget.initialSize;
     _selectedCondition = widget.initialCondition;
+    _selectedGender = widget.initialGender;
     _priceRange = RangeValues(
       widget.initialPriceMin.toDouble(),
       widget.initialPriceMax.toDouble(),
@@ -63,7 +84,8 @@ class _FilterSheetState extends State<FilterSheet> {
       _selectedCategory = null;
       _selectedSize = null;
       _selectedCondition = null;
-      _priceRange = const RangeValues(0, 100);
+      _selectedGender = null;
+      _priceRange = const RangeValues(0, 500);
     });
   }
 
@@ -135,6 +157,12 @@ class _FilterSheetState extends State<FilterSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Gender section
+                  _buildSectionTitle('Gender'),
+                  const SizedBox(height: AppSpacing.md),
+                  _buildGenderChips(),
+                  const SizedBox(height: AppSpacing.xl),
+
                   // Category section
                   _buildSectionTitle('Category'),
                   const SizedBox(height: AppSpacing.md),
@@ -163,7 +191,7 @@ class _FilterSheetState extends State<FilterSheet> {
             ),
           ),
 
-          // Apply button
+          // Apply button — gradient pill
           Padding(
             padding: EdgeInsets.only(
               left: AppSpacing.xl,
@@ -171,30 +199,29 @@ class _FilterSheetState extends State<FilterSheet> {
               top: AppSpacing.lg,
               bottom: MediaQuery.of(context).padding.bottom + AppSpacing.lg,
             ),
-            child: SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: () {
-                  widget.onApply(
-                    _selectedCategory,
-                    _selectedSize,
-                    _selectedCondition,
-                    _priceRange.start.round(),
-                    _priceRange.end.round(),
-                  );
-                  Navigator.of(context).pop();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                  ),
+            child: GestureDetector(
+              onTap: () {
+                widget.onApply(
+                  _selectedCategory,
+                  _selectedSize,
+                  _selectedCondition,
+                  _selectedGender,
+                  _priceRange.start.round(),
+                  _priceRange.end.round(),
+                );
+                Navigator.of(context).pop();
+              },
+              child: Container(
+                width: double.infinity,
+                height: 52,
+                decoration: BoxDecoration(
+                  gradient: AppGradients.primary,
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                  boxShadow: AppShadows.md,
                 ),
+                alignment: Alignment.center,
                 child: Text(
-                  'Apply Filters',
+                  'Show Results',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: AppTypography.fontMd,
                     fontWeight: FontWeight.w700,
@@ -220,8 +247,31 @@ class _FilterSheetState extends State<FilterSheet> {
     );
   }
 
+  Widget _buildGenderChips() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: genderOptions.map((gender) {
+          final isSelected = _selectedGender == gender;
+          return Padding(
+            padding: const EdgeInsets.only(right: AppSpacing.sm),
+            child: _FilterChip(
+              label: genderLabel(gender),
+              isSelected: isSelected,
+              onTap: () {
+                setState(() {
+                  _selectedGender = isSelected ? null : gender;
+                });
+              },
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Widget _buildCategoryChips() {
-    const categories = MockApi.categories;
+    final categories = widget.categories;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -311,7 +361,7 @@ class _FilterSheetState extends State<FilterSheet> {
           child: RangeSlider(
             values: _priceRange,
             min: 0,
-            max: 100,
+            max: 500,
             divisions: 20,
             onChanged: (values) {
               setState(() {
@@ -372,18 +422,15 @@ class _FilterChip extends StatelessWidget {
           vertical: AppSpacing.sm + 2,
         ),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : AppColors.surface,
+          color: isSelected ? AppColors.primaryFixed : AppColors.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(AppRadius.full),
-          border: isSelected
-              ? null
-              : Border.all(color: AppColors.border, width: 1),
         ),
         child: Text(
           label,
           style: GoogleFonts.plusJakartaSans(
             fontSize: AppTypography.fontSm,
             fontWeight: FontWeight.w600,
-            color: isSelected ? AppColors.white : AppColors.textSecondary,
+            color: isSelected ? AppColors.primary : AppColors.onSurfaceVariant,
           ),
         ),
       ),
@@ -394,7 +441,8 @@ class _FilterChip extends StatelessWidget {
 /// Shows the filter bottom sheet pre-populated with the current filter state
 /// from [shopProvider]. On apply, updates the provider with all selected values.
 void showFilterSheet(BuildContext context, WidgetRef ref) {
-  final filters = ref.read(shopProvider).filters;
+  final shopState = ref.read(shopProvider);
+  final filters = shopState.filters;
 
   showModalBottomSheet<void>(
     context: context,
@@ -405,13 +453,16 @@ void showFilterSheet(BuildContext context, WidgetRef ref) {
         initialCategory: filters.categoryFilter,
         initialSize: filters.sizeFilter,
         initialCondition: filters.conditionFilter,
+        initialGender: filters.genderFilter,
         initialPriceMin: filters.priceMin,
         initialPriceMax: filters.priceMax,
-        onApply: (category, size, condition, priceMin, priceMax) {
+        categories: shopState.categories,
+        onApply: (category, size, condition, gender, priceMin, priceMax) {
           final notifier = ref.read(shopProvider.notifier);
           notifier.setCategory(category);
           notifier.setSize(size);
           notifier.setCondition(condition);
+          notifier.setGender(gender);
           notifier.setPriceRange(priceMin, priceMax);
         },
       );

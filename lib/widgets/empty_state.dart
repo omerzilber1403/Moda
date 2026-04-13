@@ -27,16 +27,9 @@ class EmptyState extends StatelessWidget {
             vertical: AppSpacing.xxxl,
           ),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: AppColors.surfaceContainerLow,
             borderRadius: BorderRadius.circular(AppRadius.xxl),
-            border: Border.all(color: AppColors.border, width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.shadowColor.withValues(alpha: 0.06),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            boxShadow: AppShadows.md,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,

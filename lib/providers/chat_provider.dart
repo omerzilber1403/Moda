@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../models/models.dart';
-import '../services/mock_api.dart';
+import '../services/supabase_service.dart';
 
 class ChatState {
   final List<Message> messages;
@@ -12,6 +12,7 @@ class ChatState {
 
 class ChatNotifier extends StateNotifier<ChatState> {
   final String orderId;
+  RealtimeChannel? _channel;
 
   ChatNotifier(this.orderId) : super(const ChatState()) {
     _loadMessages();
@@ -19,53 +20,61 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   Future<void> _loadMessages() async {
     state = const ChatState(isLoading: true);
-    await Future.delayed(const Duration(milliseconds: 300));
-    final messages = MockApi.getMessagesForOrder(orderId);
-    state = ChatState(messages: messages);
-  }
+    try {
+      final data = await supabase
+          .from('messages')
+          .select()
+          .eq('order_id', orderId)
+          .order('created_at', ascending: true);
+      final messages =
+          (data as List).map((e) => Message.fromJson(e)).toList();
+      state = ChatState(messages: messages);
 
-  void sendMessage(String content, String senderId) {
-    final msg = Message(
-      id: const Uuid().v4(),
-      orderId: orderId,
-      senderId: senderId,
-      content: content,
-      createdAt: DateTime.now(),
-    );
-    MockApi.messages.add(msg);
-    state = ChatState(messages: [...state.messages, msg]);
-
-    // Simulate reply after 1-2 seconds
-    _simulateReply();
-  }
-
-  Future<void> _simulateReply() async {
-    await Future.delayed(const Duration(seconds: 2));
-    final replies = [
-      'Sounds great!',
-      'Perfect, see you there!',
-      'I love it!',
-      'That works for me!',
-      'Looking forward to it!',
-    ];
-    final reply = replies[DateTime.now().second % replies.length];
-
-    // Find the other user in this order
-    final order = MockApi.orders.firstWhere((o) => o.id == orderId);
-    final otherUserId =
-        order.buyerId == 'user-me' ? order.sellerId : order.buyerId;
-
-    final msg = Message(
-      id: const Uuid().v4(),
-      orderId: orderId,
-      senderId: otherUserId,
-      content: reply,
-      createdAt: DateTime.now(),
-    );
-    MockApi.messages.add(msg);
-    if (mounted) {
-      state = ChatState(messages: [...state.messages, msg]);
+      // Subscribe to realtime inserts
+      _channel = supabase
+          .channel('order-chat-$orderId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'messages',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'order_id',
+              value: orderId,
+            ),
+            callback: (payload) {
+              if (!mounted) return;
+              final newMsg = Message.fromJson(payload.newRecord);
+              // Avoid duplicates
+              if (state.messages.any((m) => m.id == newMsg.id)) return;
+              state = ChatState(messages: [...state.messages, newMsg]);
+            },
+          )
+          .subscribe();
+    } catch (_) {
+      state = const ChatState();
     }
+  }
+
+  Future<void> sendMessage(String content, String senderId) async {
+    try {
+      await supabase.from('messages').insert({
+        'order_id': orderId,
+        'sender_id': senderId,
+        'content': content,
+        'type': 'text',
+        'sent_at': DateTime.now().toIso8601String(),
+      });
+      // Realtime channel will auto-add the message to state
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  @override
+  void dispose() {
+    _channel?.unsubscribe();
+    super.dispose();
   }
 }
 

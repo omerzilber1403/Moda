@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../theme/tokens.dart';
 
 class _NotifPref {
@@ -25,7 +26,16 @@ class NotificationSettingsScreen extends ConsumerStatefulWidget {
 
 class _NotificationSettingsScreenState
     extends ConsumerState<NotificationSettingsScreen> {
-  late final List<_NotifPref> _prefs;
+  late List<_NotifPref> _prefs;
+
+  static const _keys = [
+    'notif_order_updates',
+    'notif_new_messages',
+    'notif_price_drop',
+    'notif_promotions',
+    'notif_style_coins',
+  ];
+  static const _defaults = [true, true, true, false, true];
 
   @override
   void initState() {
@@ -34,29 +44,40 @@ class _NotificationSettingsScreenState
       _NotifPref(
         title: 'Order Updates',
         subtitle: 'Get notified when your order status changes',
-        enabled: true,
+        enabled: _defaults[0],
       ),
       _NotifPref(
         title: 'New Messages',
         subtitle: 'Receive alerts when someone sends you a message',
-        enabled: true,
+        enabled: _defaults[1],
       ),
       _NotifPref(
         title: 'Price Drop Alerts',
         subtitle: 'Know when items in your wishlist go on sale',
-        enabled: true,
+        enabled: _defaults[2],
       ),
       _NotifPref(
         title: 'Promotions & Offers',
         subtitle: 'Special deals, events, and seasonal offers',
-        enabled: false,
+        enabled: _defaults[3],
       ),
       _NotifPref(
         title: 'Style Coin Updates',
         subtitle: 'Balance changes, bonuses, and coin promotions',
-        enabled: true,
+        enabled: _defaults[4],
       ),
     ];
+    _loadPrefs();
+  }
+
+  Future<void> _loadPrefs() async {
+    final sp = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      for (int i = 0; i < _prefs.length; i++) {
+        _prefs[i].enabled = sp.getBool(_keys[i]) ?? _defaults[i];
+      }
+    });
   }
 
   @override
@@ -146,8 +167,10 @@ class _NotificationSettingsScreenState
                 const SizedBox(width: AppSpacing.md),
                 Switch.adaptive(
                   value: pref.enabled,
-                  onChanged: (val) {
+                  onChanged: (val) async {
                     setState(() => pref.enabled = val);
+                    final sp = await SharedPreferences.getInstance();
+                    await sp.setBool(_keys[index], val);
                   },
                   activeColor: AppColors.primary,
                   activeTrackColor:

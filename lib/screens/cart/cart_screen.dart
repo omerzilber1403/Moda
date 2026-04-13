@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/models.dart';
 import '../../providers/cart_provider.dart';
-import '../../services/mock_api.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/glass_button.dart';
@@ -311,12 +310,33 @@ class _BottomBar extends StatelessWidget {
               ],
             ),
           ),
-          SizedBox(
-            width: 160,
-            child: GlassButton(
-              label: 'Checkout',
-              icon: Icons.arrow_forward_rounded,
-              onPressed: onCheckout,
+          GestureDetector(
+            onTap: onCheckout,
+            child: Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+              decoration: BoxDecoration(
+                gradient: AppGradients.primary,
+                borderRadius: BorderRadius.circular(AppRadius.full),
+                boxShadow: AppShadows.md,
+              ),
+              alignment: Alignment.center,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Proceed to Checkout',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: AppColors.onPrimary,
+                      fontSize: AppTypography.fontMd,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  const Icon(Icons.arrow_forward_rounded,
+                      color: AppColors.onPrimary, size: 18),
+                ],
+              ),
             ),
           ),
         ],
